@@ -25,18 +25,28 @@ if 'username' not in st.session_state:
 config = {
     'credentials': {
         'usernames': {
-            st.secrets['username']: {
-                'name': st.secrets['name'],
-                'password': st.secrets['password']
+            st.secrets['username']: {}
             }
         }
-    },
+    ,
     'cookie': {
         'name': 'your_cookie_name',
         'key': st.secrets['cookie_key'],
         'expiry_days': 60
     }
 }
+
+for i in range(1, 100):  # Assuming a maximum of 99 users
+    username_key = f'username{i}'
+    if username_key in st.secrets:
+        username = st.secrets[username_key]
+        config['credentials']['usernames'][username] = {
+            'name': st.secrets[f'name{i}'],
+            'password': st.secrets[f'password{i}']
+        }
+    else:
+        break
+    
 authenticator = stauth.Authenticate(
     config['credentials'],
     config['cookie']['name'],
