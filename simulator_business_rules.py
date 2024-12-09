@@ -36,7 +36,7 @@ config = {
     }
 }
 
-for i in range(1, 100):  # Assuming a maximum of 99 users
+for i in range(1, 10):  
     username_key = f'username{i}'
     if username_key in st.secrets:
         username = st.secrets[username_key]
@@ -46,7 +46,7 @@ for i in range(1, 100):  # Assuming a maximum of 99 users
         }
     else:
         break
-    
+
 authenticator = stauth.Authenticate(
     config['credentials'],
     config['cookie']['name'],
