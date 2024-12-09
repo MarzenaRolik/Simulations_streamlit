@@ -24,9 +24,7 @@ if 'username' not in st.session_state:
 #     config = yaml.load(file, Loader=SafeLoader)
 config = {
     'credentials': {
-        'usernames': {
-            st.secrets['username']: {}
-            }
+        'usernames': {}
         }
     ,
     'cookie': {
