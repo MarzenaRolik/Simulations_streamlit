@@ -20,13 +20,15 @@ if 'name' not in st.session_state:
 if 'username' not in st.session_state:
     st.session_state['username'] = None
 
-# with open('./config.yaml') as file:
-#     config = yaml.load(file, Loader=SafeLoader)
 config = {
     'credentials': {
-        'usernames': {}
+        'usernames': {
+            st.secrets['username']: {
+                'name': st.secrets['name'],
+                'password': st.secrets['password']  
+            }
         }
-    ,
+    },
     'cookie': {
         'name': 'your_cookie_name',
         'key': st.secrets['cookie_key'],
@@ -34,16 +36,30 @@ config = {
     }
 }
 
-for i in range(1, 10):  
-    username_key = f'username{i}'
-    if username_key in st.secrets:
-        username = st.secrets[username_key]
-        config['credentials']['usernames'][username] = {
-            'name': st.secrets[f'name{i}'],
-            'password': st.secrets[f'password{i}']
-        }
-    else:
-        break
+# with open('./config.yaml') as file:
+#     config = yaml.load(file, Loader=SafeLoader)
+# config = {
+#     'credentials': {
+#         'usernames': {}
+#         }
+#     ,
+#     'cookie': {
+#         'name': 'your_cookie_name',
+#         'key': st.secrets['cookie_key'],
+#         'expiry_days': 60
+#     }
+# }
+
+# for i in range(1, 10):  
+#     username_key = f'username{i}'
+#     if username_key in st.secrets:
+#         username = st.secrets[username_key]
+#         config['credentials']['usernames'][username] = {
+#             'name': st.secrets[f'name{i}'],
+#             'password': st.secrets[f'password{i}']
+#         }
+#     else:
+#         break
 
 authenticator = stauth.Authenticate(
     config['credentials'],
