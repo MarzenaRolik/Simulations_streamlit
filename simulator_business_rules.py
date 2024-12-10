@@ -12,29 +12,29 @@ st.set_page_config(
     page_icon="📊",
     layout="wide"
 )
-# Initialize session states
-if 'authentication_status' not in st.session_state:
-    st.session_state['authentication_status'] = None
-if 'name' not in st.session_state:
-    st.session_state['name'] = None
-if 'username' not in st.session_state:
-    st.session_state['username'] = None
+# # Initialize session states
+# if 'authentication_status' not in st.session_state:
+#     st.session_state['authentication_status'] = None
+# if 'name' not in st.session_state:
+#     st.session_state['name'] = None
+# if 'username' not in st.session_state:
+#     st.session_state['username'] = None
 
-config = {
-    'credentials': {
-        'usernames': {
-            st.secrets['username']: {
-                'name': st.secrets['name'],
-                'password': st.secrets['password']  
-            }
-        }
-    },
-    'cookie': {
-        'name': 'your_cookie_name',
-        'key': st.secrets['cookie_key'],
-        'expiry_days': 60
-    }
-}
+# config = {
+#     'credentials': {
+#         'usernames': {
+#             st.secrets['username']: {
+#                 'name': st.secrets['name'],
+#                 'password': st.secrets['password']  
+#             }
+#         }
+#     },
+#     'cookie': {
+#         'name': 'your_cookie_name',
+#         'key': st.secrets['cookie_key'],
+#         'expiry_days': 60
+#     }
+# }
 
 
 # with open('./config.yaml') as file:
@@ -62,17 +62,17 @@ config = {
 #     else:
 #         break
 
-authenticator = stauth.Authenticate(
-    config['credentials'],
-    config['cookie']['name'],
-    config['cookie']['key'],
-    config['cookie']['expiry_days']
-)
+# authenticator = stauth.Authenticate(
+#     config['credentials'],
+#     config['cookie']['name'],
+#     config['cookie']['key'],
+#     config['cookie']['expiry_days']
+# )
 
-def show_login():
-    st.title("Deal Analysis Dashboard")
-    st.markdown("Please log in to access the dashboard.")
-    return authenticator.login( key='Login2')
+# def show_login():
+#     st.title("Business Rules Simulator")
+#     st.markdown("Please log in to access the dashboard.")
+#     return authenticator.login( key='Login2')
 
 def calculate_score_level(score, thresholds):
     for level, threshold in thresholds.items():
@@ -112,8 +112,8 @@ def show_dashboard():
 
     # Logout button in sidebar
     with st.sidebar:
-        st.write(f'Welcome *{st.session_state["name"]}*')
-        authenticator.logout('Logout', 'sidebar')
+        # st.write(f'Welcome *{st.session_state["name"]}*')
+        # authenticator.logout('Logout', 'sidebar')
 
         # Add a reset button in sidebar
         if st.session_state.file_uploaded:
@@ -242,27 +242,27 @@ def show_dashboard():
         st.dataframe(display_df)
 
 def main():
-    # Check authentication status
-    if st.session_state['authentication_status'] != True:
-        st.title("Deal Analysis Dashboard")
-        st.markdown("Please log in to access the dashboard.")
+    # # Check authentication status
+    # if st.session_state['authentication_status'] != True:
+    #     st.title("Deal Analysis Dashboard")
+    #     st.markdown("Please log in to access the dashboard.")
         
-        # Handle authentication
-        try:
-            name, authentication_status, username = authenticator.login( key='Login1')
-            if authentication_status:
-                st.session_state['authentication_status'] = True
-                st.session_state['name'] = name
-                st.session_state['username'] = username
-                st.rerun()
-            elif authentication_status == False:
-                st.error('Username/password is incorrect')
-            elif authentication_status is None:
-                st.warning('Please enter your username and password')
-        except Exception as e:
-            st.error(f"Please provide correct username and password")
-    else:
-        show_dashboard()
+    #     # Handle authentication
+    #     try:
+    #         name, authentication_status, username = authenticator.login( key='Login1')
+    #         if authentication_status:
+    #             st.session_state['authentication_status'] = True
+    #             st.session_state['name'] = name
+    #             st.session_state['username'] = username
+    #             st.rerun()
+    #         elif authentication_status == False:
+    #             st.error('Username/password is incorrect')
+    #         elif authentication_status is None:
+    #             st.warning('Please enter your username and password')
+    #     except Exception as e:
+    #         st.error(f"Please provide correct username and password")
+    # else:
+    show_dashboard()
 
 if __name__ == '__main__':
     main()
