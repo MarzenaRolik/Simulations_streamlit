@@ -51,18 +51,22 @@ def initialize_session_state():
     if 'permanent_thresholds' not in st.session_state:
         st.session_state.permanent_thresholds = load_default_thresholds()
     if 'temp_thresholds' not in st.session_state:
-        st.session_state.temp_thresholds = st.session_state.permanent_thresholds.copy()
+        st.session_state.temp_thresholds = {}  # Initialize as empty dict instead of full copy
     if 'modified_countries' not in st.session_state:
         st.session_state.modified_countries = set()
     if 'initial_thresholds' not in st.session_state:
         st.session_state.initial_thresholds = st.session_state.permanent_thresholds.copy()
 
-
 def display_threshold_controls(country):
     """Display and handle threshold controls for a specific country."""
-    thresholds = st.session_state.temp_thresholds.get(country, 
-                                                     st.session_state.temp_thresholds['DEFAULT']).copy()
-    modified = False    
+    thresholds = st.session_state.permanent_thresholds.get(country, 
+                                                         st.session_state.permanent_thresholds['DEFAULT']).copy()
+    
+    if country in st.session_state.temp_thresholds:
+        # If country has temporary changes, use those values instead
+        thresholds.update(st.session_state.temp_thresholds[country])
+    
+    modified = False 
     
     st.sidebar.subheader('Gross Margin % Thresholds')
     new_gm_l0 = st.sidebar.slider('Gross Margin % L0 More Than', 0, 100, int(thresholds['gm_l0']), key=f'gm_l0_{country}')
@@ -97,40 +101,45 @@ def display_threshold_controls(country):
         st.session_state.modified_countries.add(country)
         modified = True
 
-    # Add save button in the display controls
-    if modified or country in st.session_state.modified_countries:
-        st.sidebar.markdown("---")
-        col1, col2 = st.sidebar.columns(2)
-        with col1:
-            if st.button(f'Save {country} Changes', key=f'save_{country}'):
-                if save_permanent_thresholds():
-                    st.success(f'Changes for {country} saved permanently')
-        with col2:
-            if st.button(f'Reset {country}', key=f'reset_{country}'):
-                if country in st.session_state.temp_thresholds:
-                    st.session_state.temp_thresholds[country] = st.session_state.permanent_thresholds[country].copy()
-                    st.session_state.modified_countries.discard(country)
-                    st.success(f'Changes for {country} reset')
+    # # Add save button in the display controls
+    # if modified or country in st.session_state.modified_countries:
+    #     st.sidebar.markdown("---")
+    #     col1, col2 = st.sidebar.columns(2)
+    #     with col1:
+    #         if st.button(f'Save {country} Changes', key=f'save_{country}'):
+    #             if save_permanent_thresholds():
+    #                 st.success(f'Changes for {country} saved permanently')
+    #     with col2:
+    #         if st.button(f'Reset {country}', key=f'reset_{country}'):
+    #             if country in st.session_state.temp_thresholds:
+    #                 st.session_state.temp_thresholds[country] = st.session_state.permanent_thresholds[country].copy()
+    #                 st.session_state.modified_countries.discard(country)
+    #                 st.success(f'Changes for {country} reset')
 
     return modified
 
 def save_permanent_thresholds():
     """Save current temporary thresholds as permanent."""
-    # Update permanent thresholds with temporary changes
-    for country in st.session_state.modified_countries:
-        st.session_state.permanent_thresholds[country] = st.session_state.temp_thresholds[country].copy()
-    
-    # Save to file
     try:
+        # Update permanent thresholds with temporary changes
+        for country in st.session_state.modified_countries:
+            st.session_state.permanent_thresholds[country] = st.session_state.temp_thresholds[country].copy()
+        
+        # Save to file
         with open('thresholds.json', 'w') as f:
             json.dump(st.session_state.permanent_thresholds, f, indent=4)
+            
+        # After successful save, update the initial thresholds to match the new permanent state
+        st.session_state.initial_thresholds = st.session_state.permanent_thresholds.copy()
+        
         # Clear modified countries only after successful save
         st.session_state.modified_countries.clear()
         return True
+    
     except Exception as e:
         st.error(f"Error saving thresholds: {str(e)}")
         return False
-
+    
 def reset_to_initial_thresholds():
     """Reset both permanent and temporary thresholds to initial values."""
     st.session_state.permanent_thresholds = st.session_state.initial_thresholds.copy()
@@ -248,31 +257,38 @@ def main():
     if data_file is not None:
         data = pd.read_csv(data_file)
         
-        # Filters
+# Filters
         st.sidebar.header('Filters')
         selected_countries = st.sidebar.multiselect(
             'Select Countries',
             options=['All'] + list(data['Country'].unique()),
             default='All'
         )
-        
-        # Show threshold controls for selected country
-        if len(selected_countries) == 1 and selected_countries[0] != 'All':
+
+        # Show threshold controls and status for selected countries
+        if selected_countries and 'All' not in selected_countries:
             st.sidebar.header('Threshold Configuration')
-            modified = display_threshold_controls(selected_countries[0])
+            for country in selected_countries:
+                with st.sidebar.expander(f'Thresholds for {country}'):
+                    display_threshold_controls(country)
+
+        # Show modified countries status
+        if st.session_state.modified_countries:
+            st.sidebar.markdown("---")
+            st.sidebar.subheader("Modified Countries")
+            st.sidebar.info(f"Countries with unsaved changes: {', '.join(st.session_state.modified_countries)}")
             
-            # Save changes permanently if requested
-            if st.sidebar.button('Save Changes Permanently'):
-                save_permanent_thresholds()
-                st.sidebar.success('Changes saved permanently')
-        
-        # Reset temporary changes button
-        col1, col2 = st.sidebar.columns(2)
-        with col1:
-            if st.button('Reset Temporary Changes'):
-                st.session_state.temp_thresholds = st.session_state.permanent_thresholds.copy()
-                st.session_state.modified_countries.clear()
-                st.sidebar.success('Temporary changes reset')
+            # Global save and reset buttons
+            col1, col2 = st.sidebar.columns(2)
+            with col1:
+                if st.button('Save All Changes'):
+                    if save_permanent_thresholds():
+                        st.success('All changes saved permanently')
+            with col2:
+                if st.button('Reset All Changes'):
+                    st.session_state.temp_thresholds = st.session_state.permanent_thresholds.copy()
+                    st.session_state.modified_countries.clear()
+                    st.success('All temporary changes reset')
     
             
         # Filter data based on country selection
