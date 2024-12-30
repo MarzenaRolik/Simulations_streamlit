@@ -48,10 +48,12 @@ def save_thresholds(thresholds):
 
 def initialize_session_state():
     """Initialize session state variables."""
+    if 'thresholds' not in st.session_state:
+        st.session_state.thresholds = load_default_thresholds()
     if 'permanent_thresholds' not in st.session_state:
         st.session_state.permanent_thresholds = load_default_thresholds()
     if 'temp_thresholds' not in st.session_state:
-        st.session_state.temp_thresholds = {}  # Initialize as empty dict instead of full copy
+        st.session_state.temp_thresholds = {}
     if 'modified_countries' not in st.session_state:
         st.session_state.modified_countries = set()
     if 'initial_thresholds' not in st.session_state:
@@ -59,14 +61,18 @@ def initialize_session_state():
 
 def display_threshold_controls(country):
     """Display and handle threshold controls for a specific country."""
-    thresholds = st.session_state.permanent_thresholds.get(country, 
-                                                         st.session_state.permanent_thresholds['DEFAULT']).copy()
+   # First check if country exists in permanent thresholds, if not use DEFAULT
+    if country not in st.session_state.permanent_thresholds:
+        st.session_state.permanent_thresholds[country] = st.session_state.permanent_thresholds['DEFAULT'].copy()
     
+    # Get the base thresholds from permanent storage
+    thresholds = st.session_state.permanent_thresholds[country].copy()
+    
+    # Apply any temporary changes if they exist
     if country in st.session_state.temp_thresholds:
-        # If country has temporary changes, use those values instead
         thresholds.update(st.session_state.temp_thresholds[country])
     
-    modified = False 
+    modified = False
     
     st.sidebar.subheader('Gross Margin % Thresholds')
     new_gm_l0 = st.sidebar.slider('Gross Margin % L0 More Than', 0, 100, int(thresholds['gm_l0']), key=f'gm_l0_{country}')
@@ -121,18 +127,18 @@ def display_threshold_controls(country):
 def save_permanent_thresholds():
     """Save current temporary thresholds as permanent."""
     try:
-        # Update permanent thresholds with temporary changes
+        # Update both permanent_thresholds and thresholds
         for country in st.session_state.modified_countries:
             st.session_state.permanent_thresholds[country] = st.session_state.temp_thresholds[country].copy()
+            st.session_state.thresholds[country] = st.session_state.temp_thresholds[country].copy()
         
         # Save to file
-        with open('thresholds.json', 'w') as f:
-            json.dump(st.session_state.permanent_thresholds, f, indent=4)
-            
-        # After successful save, update the initial thresholds to match the new permanent state
+        save_thresholds(st.session_state.permanent_thresholds)
+        
+        # Update initial thresholds
         st.session_state.initial_thresholds = st.session_state.permanent_thresholds.copy()
         
-        # Clear modified countries only after successful save
+        # Clear modified countries
         st.session_state.modified_countries.clear()
         return True
     
@@ -149,9 +155,16 @@ def reset_to_initial_thresholds():
 
 def get_applicable_thresholds(country):
     """Get the appropriate thresholds for a country, using temporary if modified."""
+    # First ensure country exists in thresholds
+    if country not in st.session_state.thresholds:
+        st.session_state.thresholds[country] = st.session_state.thresholds['DEFAULT'].copy()
+    
+    # If country has temporary modifications, use those
     if country in st.session_state.modified_countries:
-        return st.session_state.temp_thresholds.get(country, st.session_state.temp_thresholds['DEFAULT'])
-    return st.session_state.permanent_thresholds.get(country, st.session_state.permanent_thresholds['DEFAULT'])
+        return st.session_state.temp_thresholds.get(country, st.session_state.thresholds['DEFAULT'])
+    
+    # Otherwise use the permanent thresholds
+    return st.session_state.thresholds.get(country, st.session_state.thresholds['DEFAULT'])
 
 ###    
 def determine_vol_level(vol, thresholds):
@@ -241,10 +254,11 @@ def main():
     threshold_file = st.sidebar.file_uploader("Upload Thresholds JSON", type=['json'])
     if threshold_file is not None:
         loaded_thresholds = json.load(threshold_file)
-        st.session_state.permanent_thresholds = loaded_thresholds
-        st.session_state.temp_thresholds = loaded_thresholds.copy()
+        st.session_state.thresholds = loaded_thresholds
+        st.session_state.permanent_thresholds = loaded_thresholds.copy()
+        st.session_state.temp_thresholds = {}  # Reset temp thresholds
         st.session_state.initial_thresholds = loaded_thresholds.copy()
-        st.session_state.modified_countries.clear()   
+        st.session_state.modified_countries.clear()
     
         # Add Reset to Initial Thresholds button
     if st.sidebar.button('Reset to Initial JSON Thresholds'):
