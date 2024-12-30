@@ -4,94 +4,102 @@ import plotly.express as px
 import json
 from datetime import datetime
 
+# Configure the page
+st.set_page_config(
+    page_title="Business Rules and Escalation Reason Simulator",
+    page_icon="📊",
+    layout="wide"
+)
+
 def load_default_thresholds():
-    """Load default thresholds from JSON file or use built-in defaults."""
-    default_thresholds = {
-        "DEFAULT": {
-            "vol_l4": 10000000.01,
-            "vol_l3": 500000.01,
-            "vol_l2": 120000.01,
-            "vol_l1": 80000.01,
-            "vol_l0": 50000.01,
-
-            "gm_l4": 0,
-            "gm_l3": 67,
-            "gm_l2": 70,
-            "gm_l1": 74,
-            "gm_l0": 77,
-
-            "ds_l4": 10,
-            "ds_l3": 21,
-            "ds_l2": 30,
-            "ds_l1": 55,
-            "ds_l0": 81
-        }
-    }
+    """Load default thresholds from JSON file"""
 
     try:
+        # Attempt to load thresholds from file
         with open('thresholds.json', 'r') as f:
-            saved_thresholds = json.load(f)
-            # Ensure all required keys exist
-            for country, thresholds in saved_thresholds.items():
-                for key in default_thresholds["DEFAULT"].keys():
-                    if key not in thresholds:
-                        thresholds[key] = default_thresholds["DEFAULT"][key]
-            return saved_thresholds
+            loaded_thresholds = json.load(f)
+            
+        # Get list of countries from loaded thresholds
+        countries = list(loaded_thresholds.keys())
+            
+        # Validate and process loaded thresholds
+        final_thresholds = {}
+        
+        # Process each country from the loaded file
+        for country in countries:
+            if country == 'DEFAULT':
+                continue  # Already handled above
+                
+            final_thresholds[country] = {}
+            for key in final_thresholds[0].keys():
+                final_thresholds[country][key] = loaded_thresholds[country][key]
+        
+        return final_thresholds
+        
     except FileNotFoundError:
-        return default_thresholds
+        st.warning("thresholds.json not found.")
+        
+    except json.JSONDecodeError:
+        # Handle corrupted JSON file
+        st.error("Error reading thresholds.json. File may be corrupted.")
+    
+    except Exception as e:
+        # Handle any other errors
+        st.error(f"Please upload thresholds and data files. ")
 
+def reload_thresholds_from_file():
+    """Reload thresholds from JSON file."""
+    try:
+        with open('thresholds.json', 'r') as f:
+            loaded_thresholds = json.load(f)
+            st.session_state.thresholds = loaded_thresholds
+            return True
+    except Exception as e:
+        st.error(f"Error reloading thresholds: {str(e)}")
+        return False
+    
 def save_thresholds(thresholds):
     """Save thresholds to JSON file."""
-    with open('thresholds.json', 'w') as f:
-        json.dump(thresholds, f, indent=4)
+    try:
+        with open('thresholds.json', 'w') as f:
+            json.dump(thresholds, f, indent=4)
+        return True
+    except Exception as e:
+        st.error(f"Error saving thresholds: {str(e)}")
+        return False
 
 def initialize_session_state():
-    """Initialize or reset session state variables."""
-    if 'permanent_thresholds' not in st.session_state:
-        st.session_state.permanent_thresholds = load_default_thresholds()
-    if 'temp_thresholds' not in st.session_state:
-        st.session_state.temp_thresholds = {}
-    if 'modified_countries' not in st.session_state:
-        st.session_state.modified_countries = set()
-    if 'initial_thresholds' not in st.session_state:
-        st.session_state.initial_thresholds = st.session_state.permanent_thresholds.copy()
+    if 'thresholds' not in st.session_state:
+        st.session_state.thresholds = load_default_thresholds()
+
 
 def display_threshold_controls(country):
     """Display and handle threshold controls for a specific country."""
-    # Ensure country exists in permanent_thresholds
-    if country not in st.session_state.permanent_thresholds:
-        st.session_state.permanent_thresholds[country] = st.session_state.permanent_thresholds['DEFAULT'].copy()
-    
-    # Retrieve current thresholds by merging permanent and temporary thresholds
-    current_thresholds = st.session_state.permanent_thresholds[country].copy()
-    if country in st.session_state.temp_thresholds:
-        current_thresholds.update(st.session_state.temp_thresholds[country])
-
-    modified = False
+    thresholds = st.session_state.thresholds[country].copy()
 
     # Gross Margin % Thresholds
     st.sidebar.subheader('Gross Margin % Thresholds')
-    new_gm_l0 = st.sidebar.slider('Gross Margin % L0 More Than', 0, 100, int(current_thresholds['gm_l0']), key=f'gm_l0_{country}')
-    new_gm_l1 = st.sidebar.slider('Gross Margin % L1 More Than', 0, 100, int(current_thresholds['gm_l1']), key=f'gm_l1_{country}')
-    new_gm_l2 = st.sidebar.slider('Gross Margin % L2 More Than', 0, 100, int(current_thresholds['gm_l2']), key=f'gm_l2_{country}')
-    new_gm_l3 = st.sidebar.slider('Gross Margin % L3 More Than', 0, 100, int(current_thresholds['gm_l3']), key=f'gm_l3_{country}')
-    new_gm_l4 = st.sidebar.slider('Gross Margin % L4 More Than', 0, 100, int(current_thresholds['gm_l4']), key=f'gm_l4_{country}')
+    new_gm_l0 = st.sidebar.slider('Gross Margin % L0 More Than', 0, 100, int(thresholds['gm_l0']), key=f'gm_l0_{country}')
+    new_gm_l1 = st.sidebar.slider('Gross Margin % L1 More Than', 0, 100, int(thresholds['gm_l1']), key=f'gm_l1_{country}')
+    new_gm_l2 = st.sidebar.slider('Gross Margin % L2 More Than', 0, 100, int(thresholds['gm_l2']), key=f'gm_l2_{country}')
+    new_gm_l3 = st.sidebar.slider('Gross Margin % L3 More Than', 0, 100, int(thresholds['gm_l3']), key=f'gm_l3_{country}')
+    new_gm_l4 = st.sidebar.slider('Gross Margin % L4 More Than', 0, 100, int(thresholds['gm_l4']), key=f'gm_l4_{country}')
 
     # Deal Score Thresholds
     st.sidebar.subheader('Deal Score Thresholds')
-    new_ds_l0 = st.sidebar.slider('Deal Score L0 More Than', 0, 100, int(current_thresholds['ds_l0']), key=f'ds_l0_{country}')
-    new_ds_l1 = st.sidebar.slider('Deal Score L1 More Than', 0, 100, int(current_thresholds['ds_l1']), key=f'ds_l1_{country}')
-    new_ds_l2 = st.sidebar.slider('Deal Score L2 More Than', 0, 100, int(current_thresholds['ds_l2']), key=f'ds_l2_{country}')
-    new_ds_l3 = st.sidebar.slider('Deal Score L3 More Than', 0, 100, int(current_thresholds['ds_l3']), key=f'ds_l3_{country}')
-    new_ds_l4 = st.sidebar.slider('Deal Score L4 More Than', 0, 100, int(current_thresholds['ds_l4']), key=f'ds_l4_{country}')
+    new_ds_l0 = st.sidebar.slider('Deal Score L0 More Than', 0, 100, int(thresholds['ds_l0']), key=f'ds_l0_{country}')
+    new_ds_l1 = st.sidebar.slider('Deal Score L1 More Than', 0, 100, int(thresholds['ds_l1']), key=f'ds_l1_{country}')
+    new_ds_l2 = st.sidebar.slider('Deal Score L2 More Than', 0, 100, int(thresholds['ds_l2']), key=f'ds_l2_{country}')
+    new_ds_l3 = st.sidebar.slider('Deal Score L3 More Than', 0, 100, int(thresholds['ds_l3']), key=f'ds_l3_{country}')
+    new_ds_l4 = st.sidebar.slider('Deal Score L4 More Than', 0, 100, int(thresholds['ds_l4']), key=f'ds_l4_{country}')
 
     # Deal Size (€) Thresholds
     st.sidebar.subheader('Deal Size (€) Thresholds')
-    new_vol_l0 = st.sidebar.number_input('Deal Size (€) L0 Less Than', value=float(current_thresholds['vol_l0']), key=f'vol_l0_{country}')
-    new_vol_l1 = st.sidebar.number_input('Deal Size (€) L1 Less Than', value=float(current_thresholds['vol_l1']), key=f'vol_l1_{country}')
-    new_vol_l2 = st.sidebar.number_input('Deal Size (€) L2 Less Than', value=float(current_thresholds['vol_l2']), key=f'vol_l2_{country}')
-    new_vol_l3 = st.sidebar.number_input('Deal Size (€) L3 Less Than', value=float(current_thresholds['vol_l3']), key=f'vol_l3_{country}')
-    new_vol_l4 = st.sidebar.number_input('Deal Size (€) L4 Less Than', value=float(current_thresholds['vol_l4']), key=f'vol_l4_{country}')
+    new_vol_l0 = st.sidebar.number_input('Deal Size (€) L0 Less Than', value=float(thresholds['vol_l0']), key=f'vol_l0_{country}')
+    new_vol_l1 = st.sidebar.number_input('Deal Size (€) L1 Less Than', value=float(thresholds['vol_l1']), key=f'vol_l1_{country}')
+    new_vol_l2 = st.sidebar.number_input('Deal Size (€) L2 Less Than', value=float(thresholds['vol_l2']), key=f'vol_l2_{country}')
+    new_vol_l3 = st.sidebar.number_input('Deal Size (€) L3 Less Than', value=float(thresholds['vol_l3']), key=f'vol_l3_{country}')
+    new_vol_l4 = st.sidebar.number_input('Deal Size (€) L4 Less Than', value=float(thresholds['vol_l4']), key=f'vol_l4_{country}')
 
     # Compile new thresholds from UI inputs
     new_thresholds = {
@@ -104,51 +112,16 @@ def display_threshold_controls(country):
     }
 
     # Detect if any threshold has changed
-    if any(current_thresholds[k] != new_thresholds[k] for k in new_thresholds):
-        st.session_state.temp_thresholds[country] = new_thresholds.copy()
-        st.session_state.modified_countries.add(country)
-        modified = True
+    if any(thresholds[k] != new_thresholds[k] for k in new_thresholds):
+        st.session_state.thresholds[country] = new_thresholds
+        save_thresholds(st.session_state.thresholds)
 
-    return modified
-
-def save_permanent_thresholds():
-    """Save all temporary thresholds to permanent_thresholds and persist to file."""
-    try:
-        # Update permanent_thresholds with temp_thresholds for each modified country
-        for country in st.session_state.modified_countries:
-            st.session_state.permanent_thresholds[country] = st.session_state.temp_thresholds[country].copy()
-
-        # Save the updated permanent_thresholds to thresholds.json
-        save_thresholds(st.session_state.permanent_thresholds)
-
-        # Clear modification tracking
-        st.session_state.modified_countries.clear()
-        st.session_state.temp_thresholds.clear()
-
-        st.success("All changes saved successfully.")
-        return True
-    except Exception as e:
-        st.error(f"Error saving thresholds: {str(e)}")
-        return False
-
-def reset_to_initial_thresholds():
-    """Reset permanent_thresholds to initial_thresholds and persist to file."""
-    try:
-        st.session_state.permanent_thresholds = st.session_state.initial_thresholds.copy()
-        st.session_state.temp_thresholds.clear()
-        st.session_state.modified_countries.clear()
-        save_thresholds(st.session_state.permanent_thresholds)
-        st.success("All thresholds have been reset to initial values.")
-    except Exception as e:
-        st.error(f"Error resetting thresholds: {str(e)}")
 
 def get_applicable_thresholds(country):
     """Retrieve the latest thresholds for a country, considering any temporary changes."""
     # Start with the permanent thresholds
-    thresholds = st.session_state.permanent_thresholds.get(country, st.session_state.permanent_thresholds['DEFAULT']).copy()
-    # Apply any temporary changes
-    if country in st.session_state.temp_thresholds:
-        thresholds.update(st.session_state.temp_thresholds[country])
+    thresholds = st.session_state.thresholds[country].copy()
+
     return thresholds
 
 # --- Business Logic Functions ---
@@ -229,32 +202,34 @@ def main():
     # Initialize session state
     initialize_session_state()
 
-    st.title('Escalation Rules Analysis and Simulation')
+    st.title('Escalation Rules Analysis & Simulations')
 
+    if 'previous_threshold_file' not in st.session_state:
+        st.session_state.previous_threshold_file = None
+    if 'loaded_thresholds' not in st.session_state:
+        st.session_state.loaded_thresholds = None
+        
     # Sidebar - Configuration
     st.sidebar.header('Configuration')
 
     # Upload thresholds JSON
     threshold_file = st.sidebar.file_uploader("Upload Thresholds JSON", type=['json'])
-    if threshold_file is not None:
-        try:
-            loaded_thresholds = json.load(threshold_file)
-            # Update permanent_thresholds with the loaded thresholds
-            st.session_state.permanent_thresholds = loaded_thresholds.copy()
-            # Clear any temporary thresholds and modified countries
-            st.session_state.temp_thresholds.clear()
-            st.session_state.modified_countries.clear()
-            # Update initial_thresholds to the loaded thresholds
-            st.session_state.initial_thresholds = loaded_thresholds.copy()
-            st.sidebar.success('Thresholds loaded successfully.')
-        except json.JSONDecodeError:
-            st.sidebar.error('Invalid JSON file uploaded.')
-        except Exception as e:
-            st.sidebar.error(f'Error loading thresholds: {str(e)}')
 
-    # Add Reset to Initial Thresholds button
-    if st.sidebar.button('Reset to Initial JSON Thresholds'):
-        reset_to_initial_thresholds()
+# Only load thresholds if the file has changed
+    if threshold_file is not None and threshold_file != st.session_state.previous_threshold_file:
+        try:
+            st.session_state.loaded_thresholds = json.load(threshold_file)
+            st.session_state.previous_threshold_file = threshold_file
+            save_thresholds(st.session_state.loaded_thresholds)
+
+            st.sidebar.success('Thresholds loaded successfully!')
+        except json.JSONDecodeError:
+            st.sidebar.error('Error: Invalid JSON file')
+        except Exception as e:
+            st.sidebar.error(f'Error loading file: {str(e)}')
+                
+        except Exception as e:
+            st.error(f"Error processing uploaded thresholds: {str(e)}")
 
     # Upload data
     data_file = st.sidebar.file_uploader("Upload Data CSV", type=['csv'])
@@ -265,34 +240,27 @@ def main():
 
             # Sidebar Filters
             st.sidebar.header('Filters')
-            countries = list(data['Country'].unique())
+            if 'previous_countries' not in st.session_state:
+                st.session_state.previous_countries = []
+            
             selected_countries = st.sidebar.multiselect(
-                'Select Countries',
-                options=['All'] + countries,
-                default=['All']
+                'Select a Country to Adjust Business Rules',
+                options=['All'] + list(data['Country'].unique()),
+                default='All'
             )
-
+            
+            # Check if country selection has changed
+            if selected_countries != st.session_state.previous_countries:
+                # Reload thresholds from file
+                reload_thresholds_from_file()
+                st.session_state.previous_countries = selected_countries
+                
             # Show threshold controls for selected countries
             if selected_countries and 'All' not in selected_countries:
                 st.sidebar.header('Threshold Configuration')
                 for country in selected_countries:
                     with st.sidebar.expander(f'Thresholds for {country}'):
                         display_threshold_controls(country)
-
-            # Show modified countries status
-            if st.session_state.modified_countries:
-                st.sidebar.markdown("---")
-                st.sidebar.subheader("Modified Countries")
-                st.sidebar.info(f"Countries with unsaved changes: {', '.join(st.session_state.modified_countries)}")
-
-                # Global save and reset buttons
-                col1, col2 = st.sidebar.columns(2)
-                with col1:
-                    if st.button('Save All Changes'):
-                        save_permanent_thresholds()
-                with col2:
-                    if st.button('Reset All Changes'):
-                        reset_to_initial_thresholds()
 
             # Filter data based on country selection
             if 'All' in selected_countries or not selected_countries:
@@ -315,7 +283,7 @@ def main():
                 options=filtered_data['quote_type'].unique(),
                 default=filtered_data['quote_type'].unique()
             )
-            vis_selected_GM = st.sidebar.slider('Gross Margin Not More Than', 0, 1000, 150)
+            vis_selected_GM = st.sidebar.slider('Validation Check: Gross Margin Not More Than', 0, 1000, 150)
 
             # Apply visualization filters
             vis_data = filtered_data[
@@ -421,7 +389,7 @@ def main():
                 filename = f'thresholds_{timestamp}.json'
                 try:
                     with open(filename, 'w') as f:
-                        json.dump(st.session_state.permanent_thresholds, f, indent=4)
+                        json.dump(st.session_state.thresholds, f, indent=4)
                     st.sidebar.success(f'Thresholds exported to {filename}')
                 except Exception as e:
                     st.sidebar.error(f'Error exporting thresholds: {str(e)}')
