@@ -389,6 +389,17 @@ def main():
             )
             st.plotly_chart(fig5)
 
+            fig6 = px.histogram(
+                vis_data,
+                x='DS',
+                color='Approval_Level',
+                title='Deal Score Distribution by Final Approval Level',
+                category_orders={"Approval_Level": sorted(vis_data['Approval_Level'].unique())},
+                barmode='overlay',
+                opacity=0.7
+            )
+            st.plotly_chart(fig6)
+
             # Cross-tabulation Table
             st.subheader('Approval Level vs Escalation Reason Cross-tabulation')
             crosstab = pd.crosstab(
@@ -404,11 +415,45 @@ def main():
                 'Vol': ['count', 'mean', 'median'],
                 'GM': ['mean', 'median'],
                 'DS': ['mean', 'median']
-            }).round(2)
-            summary_stats.columns = ['Count', 'Avg Volume', 'Median Volume', 
-                                     'Avg Gross Margin %', 'Median Gross Margin %',
-                                     'Avg Deal Score', 'Median Deal Score']
-            st.dataframe(summary_stats)
+            }).round(0)
+            
+            # Calculate totals with matching MultiIndex structure
+            total_stats = pd.DataFrame([
+                [int(vis_data['Vol'].count()), 
+                round(vis_data['Vol'].mean(), 0), 
+                round(vis_data['Vol'].median(), 0),
+                round(vis_data['GM'].mean(), 0), 
+                round(vis_data['GM'].median(), 0),
+                round(vis_data['DS'].mean(), 0), 
+                round(vis_data['DS'].median(), 0)]
+            ], columns=summary_stats.columns, index=pd.Index(['Total']))
+
+            # Combine the grouped stats with the total row
+            summary_stats = pd.concat([summary_stats, total_stats])
+            summary_stats = summary_stats.astype(int)
+
+            # Rename the columns for clarity
+            summary_stats.columns = [
+                'Count', 'Avg Volume', 'Median Volume',
+                'Avg Gross Margin %', 'Median Gross Margin %',
+                'Avg Deal Score', 'Median Deal Score'
+            ]
+
+            # Create a styled dataframe
+            styled_df = summary_stats.style.set_properties(**{
+                'background-color': 'white',
+                'color': 'black',
+                'border-color': 'black',
+                'border-style': 'solid',
+                'border-width': '1px'
+            })
+
+            # Highlight the total row
+            styled_df = styled_df.set_properties(**{
+                'background-color': '#79cac1',
+                'font-weight': 'bold'
+            }, subset=pd.IndexSlice['Total', :])
+            st.dataframe(styled_df)
 
             # Raw Data Table
             st.header('Raw Data')
