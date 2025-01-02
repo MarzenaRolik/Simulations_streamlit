@@ -286,10 +286,16 @@ def main():
             vis_selected_GM = st.sidebar.slider('Validation Check: Gross Margin Not More Than', 0, 1000, 150)
             vis_selected_min_GM = st.sidebar.slider('Validation Check: Gross Margin Not Less Than', -1000, 0, 0)
 
+            vis_selected_quote_status = st.sidebar.multiselect(
+                'Filter by Quote Status',
+                options=filtered_data['status'].unique(),
+                default=filtered_data['status'].unique()
+            )
             # Apply visualization filters
             vis_data = filtered_data[
                 (filtered_data['Country'].isin(vis_selected_countries)) &
                 (filtered_data['quote_type'].isin(vis_selected_quote_types)) &
+                (filtered_data['status'].isin(vis_selected_quote_status)) &
                 (filtered_data['GM'] < vis_selected_GM) &
                 (filtered_data['GM'] >= vis_selected_min_GM)  
 
