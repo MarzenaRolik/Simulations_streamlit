@@ -3,6 +3,9 @@ import pandas as pd
 import plotly.express as px
 import json
 from datetime import datetime
+import plotly.io as pio
+
+pio.templates[pio.templates.default].layout.colorway = ['#79cac1', '#3b9153', '#009dd2', '#f78e82', '#d774ae', '#69008c']
 
 # Configure the page
 st.set_page_config(
@@ -101,6 +104,11 @@ def display_threshold_controls(country):
     new_vol_l3 = st.sidebar.number_input('Deal Size (€) L3 Less Than', value=float(thresholds['vol_l3']), key=f'vol_l3_{country}')
     new_vol_l4 = st.sidebar.number_input('Deal Size (€) L4 Less Than', value=float(thresholds['vol_l4']), key=f'vol_l4_{country}')
 
+    # International Finance VP Thresholds
+    st.sidebar.subheader('International Finance VP Thresholds')
+    new_l5_vol = st.sidebar.number_input('Deal Size (€) L5/L6 More Than', value=float(thresholds['l5_vol']), key=f'l5_vol_{country}')
+    new_l5_gm = st.sidebar.number_input('Gross Margin % L5/L6 Less Than', value=float(thresholds['l5_gm']), key=f'l5_gm_{country}')
+
     # Compile new thresholds from UI inputs
     new_thresholds = {
         'vol_l4': new_vol_l4, 'vol_l3': new_vol_l3, 'vol_l2': new_vol_l2,
@@ -108,7 +116,8 @@ def display_threshold_controls(country):
         'gm_l4': new_gm_l4, 'gm_l3': new_gm_l3, 'gm_l2': new_gm_l2,
         'gm_l1': new_gm_l1, 'gm_l0': new_gm_l0,
         'ds_l4': new_ds_l4, 'ds_l3': new_ds_l3, 'ds_l2': new_ds_l2,
-        'ds_l1': new_ds_l1, 'ds_l0': new_ds_l0
+        'ds_l1': new_ds_l1, 'ds_l0': new_ds_l0,
+        'l5_vol': new_l5_vol, 'l5_gm' : new_l5_gm
     }
 
     # Detect if any threshold has changed
@@ -165,6 +174,12 @@ def determine_ds_level(ds, thresholds):
         return 'L4'
     return 'L5'
 
+def determine_L5_level(vol, gm, thresholds):
+    if (vol > thresholds['l5_vol']) and (gm < thresholds['l5_gm']):
+        return 'L5'
+    else:
+        return 'N/A'
+
 def get_level_value(level):
     level_map = {'L0': 0, 'L1': 1, 'L2': 2, 'L3': 3, 'L4': 4, 'L5': 5, 'N/A': -1}
     return level_map.get(level, -1)
@@ -177,7 +192,8 @@ def determine_highest_level(row):
         ('Deal Score', get_level_value(determine_ds_level(row['DS'], thresholds))),
         ('Gross Margin %', get_level_value(determine_gm_level(row['GM'], thresholds))),
         ('Deal size (€)', get_level_value(determine_vol_level(row['Vol'], thresholds))),
-        ('Other Business Rule', get_level_value(row['oBR_level']))
+        ('Other Business Rule', get_level_value(row['oBR_level'])),
+        ('International Final VP Rule', get_level_value(determine_L5_level(row['Vol'], row['GM'], thresholds)))
     ]
     max_level = max(levels, key=lambda x: x[1])
     if max_level[0] == 'Other Business Rule' and row.get('FP', False) == True:
@@ -192,6 +208,7 @@ def get_approval_level(row):
         determine_ds_level(row['DS'], thresholds),
         determine_gm_level(row['GM'], thresholds),
         determine_vol_level(row['Vol'], thresholds),
+        determine_L5_level(row['Vol'], row['GM'], thresholds),
         row['oBR_level']
     ]
     # Calculate the highest level based on defined hierarchy
@@ -316,7 +333,8 @@ def main():
                 fig1 = px.pie(
                     values=level_counts.values,
                     names=level_counts.index,
-                    title=f'Distribution of Approval Levels ({len(vis_data)} deals)'
+                    title=f'Distribution of Approval Levels ({len(vis_data)} deals)',
+                    category_orders={"names": sorted(level_counts.index)}
                 )
                 st.plotly_chart(fig1)
 
@@ -326,7 +344,9 @@ def main():
                 fig2 = px.pie(
                     values=escalation_counts.values,
                     names=escalation_counts.index,
-                    title='Distribution of Escalation Reasons'
+                    title='Distribution of Escalation Reasons',
+                    category_orders={"names": sorted(escalation_counts.index)}
+
                 )
                 st.plotly_chart(fig2)
 
@@ -341,7 +361,7 @@ def main():
                     y='GM',
                     color='Approval_Level',
                     title='Volume vs Gross Margin by Approval Level',
-                    log_x=True
+                    category_orders={"Approval_Level": sorted(vis_data['Approval_Level'].unique())},                    log_x=True
                 )
                 st.plotly_chart(fig3)
 
@@ -353,6 +373,7 @@ def main():
                     y='GM',
                     color='Final_Escalation',
                     title='Volume vs Gross Margin by Escalation Reason',
+                    category_orders={"Final_Escalation": sorted(vis_data['Final_Escalation'].unique())},
                     log_x=True
                 )
                 st.plotly_chart(fig4)
@@ -363,6 +384,7 @@ def main():
                 x='Final_Escalation',
                 color='Approval_Level',
                 title='Approval Levels by Escalation Reason',
+                category_orders={"Approval_Level": sorted(vis_data['Approval_Level'].unique())},
                 barmode='group'
             )
             st.plotly_chart(fig5)
