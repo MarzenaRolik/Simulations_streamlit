@@ -468,16 +468,40 @@ def main():
             st.dataframe(vis_data)
 
             # Export Current Thresholds
-            if st.sidebar.button('Export Current Thresholds'):
+            # if st.sidebar.button('Export Current Thresholds'):
+            #     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            #     filename = f'thresholds_{timestamp}.json'
+            #     try:
+            #         with open(filename, 'w') as f:
+            #             json.dump(st.session_state.thresholds, f, indent=4)
+            #         st.sidebar.success(f'Thresholds exported to {filename}')
+            #     except Exception as e:
+            #         st.sidebar.error(f'Error exporting thresholds: {str(e)}')
+
+            def prepare_export_data():
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 filename = f'thresholds_{timestamp}.json'
-                try:
-                    with open(filename, 'w') as f:
-                        json.dump(st.session_state.thresholds, f, indent=4)
-                    st.sidebar.success(f'Thresholds exported to {filename}')
-                except Exception as e:
-                    st.sidebar.error(f'Error exporting thresholds: {str(e)}')
+                json_data = json.dumps(st.session_state.thresholds, indent=4)
+                st.session_state.export_data = json_data
+                st.session_state.export_filename = filename
+            
+            st.sidebar.info("You can export changes made in country thresholds.")
 
+            # Export button
+            if st.sidebar.button('Prepare Threshold JSON Export'):
+                prepare_export_data()
+                st.sidebar.success("Export data prepared. Click 'Download Thresholds' to download.")
+
+            # Download button (always visible)
+            if 'export_data' in st.session_state and 'export_filename' in st.session_state:
+                st.sidebar.download_button(
+                    label="Download Thresholds",
+                    data=st.session_state.export_data,
+                    file_name=st.session_state.export_filename,
+                    mime="application/json"
+                )
+            else:
+                st.sidebar.info("Click 'Prepare Threshold JSON Export' to generate the export file.")
         except Exception as e:
             st.error(f"Error processing data file: {str(e)}")
 
