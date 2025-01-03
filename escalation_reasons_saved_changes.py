@@ -48,7 +48,7 @@ def load_default_thresholds():
     
     except Exception as e:
         # Handle any other errors
-        st.error(f"Please upload thresholds and data files. ")
+        st.warning(f"Please upload thresholds and data files. ")
 
 def reload_thresholds_from_file():
     """Reload thresholds from JSON file."""
