@@ -412,7 +412,7 @@ def main():
             # Summary Statistics
             st.subheader('Summary by Approval Level')
             summary_stats = vis_data.groupby('Approval_Level').agg({
-                'Vol': ['count', 'mean', 'median'],
+                'Vol': ['count', 'mean', 'median', 'sum'],
                 'GM': ['mean', 'median'],
                 'DS': ['mean', 'median']
             }).round(0)
@@ -422,6 +422,7 @@ def main():
                 [int(vis_data['Vol'].count()), 
                 round(vis_data['Vol'].mean(), 0), 
                 round(vis_data['Vol'].median(), 0),
+                round(vis_data['Vol'].sum(), 0),
                 round(vis_data['GM'].mean(), 0), 
                 round(vis_data['GM'].median(), 0),
                 round(vis_data['DS'].mean(), 0), 
@@ -432,13 +433,20 @@ def main():
             summary_stats = pd.concat([summary_stats, total_stats])
             summary_stats = summary_stats.astype(int)
 
+            def format_eur(x):
+                return f"€{x:,.0f}".replace(',', '.')
+            
             # Rename the columns for clarity
             summary_stats.columns = [
-                'Count', 'Avg Volume', 'Median Volume',
+                'Count', 'Avg Volume', 'Median Volume', 'Total Sales',
                 'Avg Gross Margin %', 'Median Gross Margin %',
                 'Avg Deal Score', 'Median Deal Score'
             ]
 
+            summary_stats['Total Sales'] = summary_stats['Total Sales'].apply(format_eur)
+            summary_stats['Avg Volume'] = summary_stats['Avg Volume'].apply(format_eur)
+            summary_stats['Median Volume'] = summary_stats['Median Volume'].apply(format_eur)
+                                                                                      
             # Create a styled dataframe
             styled_df = summary_stats.style.set_properties(**{
                 'background-color': 'white',
