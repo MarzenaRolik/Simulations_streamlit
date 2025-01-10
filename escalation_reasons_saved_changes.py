@@ -236,7 +236,7 @@ def determine_highest_level(row):
     
     # Join all maximum level reasons with ' & '
     return ' & '.join(max_reasons)
-    
+
 def get_approval_level(row):
     """Get approval level using the latest thresholds."""
     thresholds = get_applicable_thresholds(row['Country'])
@@ -345,8 +345,28 @@ def main():
                 options=filtered_data['status'].unique(),
                 default=filtered_data['status'].unique()
             )
+
+            filtered_data['CreatedDate'] = pd.to_datetime(filtered_data['CreatedDate'])
+            filtered_data['MonthYear'] = filtered_data['CreatedDate'].dt.to_period('M')
+            
+            # Get unique month/years for the slider
+            month_years = sorted(filtered_data['MonthYear'].unique())
+            min_month = month_years[0]
+            max_month = month_years[-1]
+            
+            # Create month range selector
+            selected_months = st.sidebar.select_slider(
+                'Select Month Range',
+                options=month_years,
+                value=(min_month, max_month),
+                format_func=lambda x: x.strftime('%B %Y')
+            )
+    
+
             # Apply visualization filters
             vis_data = filtered_data[
+                (filtered_data['MonthYear'] >= selected_months[0]) &
+                (filtered_data['MonthYear'] <= selected_months[1]) &
                 (filtered_data['Country'].isin(vis_selected_countries)) &
                 (filtered_data['quote_type'].isin(vis_selected_quote_types)) &
                 (filtered_data['status'].isin(vis_selected_quote_status)) &
