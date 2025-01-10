@@ -40,7 +40,7 @@ def load_default_thresholds():
         return final_thresholds
         
     except FileNotFoundError:
-        st.warning("thresholds.json not found.")
+        st.warning("Please upload thresholds and data files.")
         
     except json.JSONDecodeError:
         # Handle corrupted JSON file
@@ -184,10 +184,30 @@ def get_level_value(level):
     level_map = {'L0': 0, 'L1': 1, 'L2': 2, 'L3': 3, 'L4': 4, 'L5': 5, 'N/A': -1}
     return level_map.get(level, -1)
 
-def determine_highest_level(row):
-    """Determine the highest escalation level based on thresholds."""
-    thresholds = get_applicable_thresholds(row['Country'])
+# def determine_highest_level(row):
+#     """Determine the highest escalation level based on thresholds."""
+#     thresholds = get_applicable_thresholds(row['Country'])
 
+#     levels = [
+#         ('Deal Score', get_level_value(determine_ds_level(row['DS'], thresholds))),
+#         ('Gross Margin %', get_level_value(determine_gm_level(row['GM'], thresholds))),
+#         ('Deal size (€)', get_level_value(determine_vol_level(row['Vol'], thresholds))),
+#         ('Other Business Rule', get_level_value(row['oBR_level'])),
+#         ('International Final VP Rule', get_level_value(determine_L5_level(row['Vol'], row['GM'], thresholds)))
+#     ]
+#     max_level = max(levels, key=lambda x: x[1])
+#     if max_level[0] == 'Other Business Rule' and row.get('FP', False) == True:
+#         return 'Below Floor Price'
+#     return max_level[0]
+
+def determine_highest_level(row):
+    """
+    Determine the highest escalation level and all reasons that share that level.
+    Returns a string of all reasons that have the maximum level, joined by ' & '.
+    """
+    thresholds = get_applicable_thresholds(row['Country'])
+    
+    # Define all level checks
     levels = [
         ('Deal Score', get_level_value(determine_ds_level(row['DS'], thresholds))),
         ('Gross Margin %', get_level_value(determine_gm_level(row['GM'], thresholds))),
@@ -195,10 +215,20 @@ def determine_highest_level(row):
         ('Other Business Rule', get_level_value(row['oBR_level'])),
         ('International Final VP Rule', get_level_value(determine_L5_level(row['Vol'], row['GM'], thresholds)))
     ]
-    max_level = max(levels, key=lambda x: x[1])
-    if max_level[0] == 'Other Business Rule' and row.get('FP', False) == True:
-        return 'Below Floor Price'
-    return max_level[0]
+    
+    # Find the maximum level value
+    max_level_value = max(level[1] for level in levels)
+    
+    # Get all reasons that have the maximum level
+    max_reasons = [reason for reason, value in levels if value == max_level_value]
+    
+    # Special handling for Floor Price
+    if 'Other Business Rule' in max_reasons and row.get('FP', False) == True:
+        max_reasons.remove('Other Business Rule')
+        max_reasons.append('Below Floor Price')
+    
+    # Join all maximum level reasons with ' & '
+    return ' & '.join(max_reasons)
 
 def get_approval_level(row):
     """Get approval level using the latest thresholds."""
