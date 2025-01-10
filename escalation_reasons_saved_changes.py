@@ -4,6 +4,11 @@ import plotly.express as px
 import json
 from datetime import datetime
 import plotly.io as pio
+from scipy import stats
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+from scipy.stats import pearsonr
 
 pio.templates[pio.templates.default].layout.colorway = ['#79cac1', '#3b9153', '#009dd2', '#f78e82', '#d774ae', '#69008c']
 
@@ -506,8 +511,8 @@ def main():
                                                                                       
             # Create a styled dataframe
             styled_df = summary_stats.style.set_properties(**{
-                'background-color': 'white',
-                'color': 'black',
+               # 'background-color': 'white',
+                #'color': 'black',
                 'border-color': 'black',
                 'border-style': 'solid',
                 'border-width': '1px'
@@ -520,20 +525,136 @@ def main():
             }, subset=pd.IndexSlice['Total', :])
             st.dataframe(styled_df)
 
+            def create_correlation_analysis(df):
+
+                st.header("Correlation Analysis")
+                
+                # Prepare numerical data
+                df['Approval_Level_Numeric'] = df['Approval_Level'].apply(get_level_value)
+                df = df.rename(columns={'Approval_Level_Numeric': 'Approval Level', 'DS': 'Deal Score', 'Vol': 'Deal Size', 'GM': 'Gross Margin %','QuoteType__c':'Quote Type'})
+
+                numeric_cols = ['Deal Score', 'Deal Size', 'Approval Level', 'Gross Margin %']
+                numeric_data = df[numeric_cols]
+
+                # 1. Scatter plots with regression lines for top correlations
+                plt.rcParams.update({'font.size': 8}) 
+                st.subheader("Scatter Plots for Key Relationships")
+                
+                targets = ['Approval Level', 'Gross Margin %']
+                features = ['Deal Score', 'Deal Size']
+                
+                fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+                fig.suptitle('Key Feature Relationships', fontsize=16)
+                
+                for i, target in enumerate(targets):
+                    for j, feature in enumerate(features):
+                        ax = axes[i, j]
+                        sns.regplot(data=df, x=feature, y=target, ax=ax, scatter_kws={'alpha':0.5})
+                        ax.set_title(f'{feature} vs {target}')
+                        
+                        # Add correlation coefficient
+                        corr, _ = pearsonr(df[feature], df[target])
+                        ax.text(0.05, 0.95, f'Correlation: {corr:.2f}', 
+                            transform=ax.transAxes, 
+                            fontsize=10,
+                            verticalalignment='top')
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
+
+                # 2. Correlation Matrix Heatmap
+                st.subheader("Correlation Matrix Heatmap")
+                corr_matrix = numeric_data.corr()
+
+                plt.rcParams.update({'font.size': 3}) 
+                plt.figure(figsize=(1.5, 1.5))
+                sns.heatmap(corr_matrix, 
+                            annot=True, 
+                            cmap='coolwarm', 
+                            center=0,
+                            fmt='.2f',
+                            square=True,
+                            annot_kws={'size': 3},
+                            cbar_kws={'label': 'Correlation', 'shrink': .8})
+                # Adjust tick label sizes
+                plt.tick_params(axis='both', which='major', labelsize=3)  # Adjust this value as needed
+
+                # Adjust colorbar label size
+                plt.gcf().axes[-1].yaxis.label.set_size(3)
+                #plt.title('Correlation Matrix of Numerical Features')
+                st.pyplot(plt.gcf())
+                plt.close()
+                                
+                # 3. Categorical Analysis
+                plt.rcParams.update({'font.size': 9}) 
+
+                st.subheader("Target Variables by Categories")
+                
+                categorical_cols = ['Cluster', 'Country', 'Quote Type']
+                targets_display = ['Approval Level', 'Gross Margin %']
+
+                for target in targets_display:
+                    fig, axes = plt.subplots(1, len(categorical_cols), figsize=(20, 6))
+                    title = f'{target.replace("_Numeric", "")} Distribution by Categories'
+                    fig.suptitle(title, fontsize=16)
+                    
+                    for i, cat_col in enumerate(categorical_cols):
+                        # Calculate statistics for each category
+                        grouped_data = df.groupby(cat_col)[target]
+                        means = grouped_data.mean()
+                        sems = grouped_data.sem()  # Standard error of the mean
+                        
+                        # Create the bar plot without error bars first
+                        ax = axes[i]
+                        bars = ax.bar(range(len(means)), means)
+                        
+                        # Add error bars manually
+                        ax.errorbar(range(len(means)), means, yerr=sems, fmt='none', color='black', capsize=5)
+                        
+                        # Customize the plot
+                        ax.set_title(f'{target.replace("_Numeric", "")} by {cat_col}')
+                        ax.set_xticks(range(len(means)))
+                        ax.set_xticklabels(means.index, rotation=45, ha='right')
+                        
+                        # Add custom y-ticks for Approval_Level
+                        if target == 'Approval Level':
+                            ax.set_yticks(range(-1, 6))
+                            ax.set_yticklabels(['N/A', 'L0', 'L1', 'L2', 'L3', 'L4', 'L5'])
+                
+                    plt.tight_layout()
+                    st.pyplot(fig)
+                    plt.close()
+                
+                # 4. Time Series Analysis
+                st.subheader("Time Series Trends")
+                if hasattr(df['MonthYear'].dtype, 'freq'):  # Check if it's Period
+                    df['MonthYear'] = df['MonthYear'].dt.to_timestamp()
+                # Convert MonthYear to datetime if not already
+                #df['MonthYear'] = pd.to_datetime(df['MonthYear'])
+                
+                # Plot time series for both target variables
+                fig, axes = plt.subplots(2, 1, figsize=(15, 10))
+                
+                for i, target in enumerate(targets):
+                    monthly_avg = df.groupby('MonthYear')[target].mean()
+                    
+                    axes[i].plot(monthly_avg.index, monthly_avg.values, marker='o')
+                    axes[i].set_title(f'{target} Trend Over Time')
+                    axes[i].set_xlabel('Month-Year')
+                    axes[i].set_ylabel(target)
+                    axes[i].tick_params(axis='x', rotation=45)
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
+
+            create_correlation_analysis(vis_data)
+
             # Raw Data Table
             st.header('Raw Data')
             st.dataframe(vis_data)
 
-            # Export Current Thresholds
-            # if st.sidebar.button('Export Current Thresholds'):
-            #     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            #     filename = f'thresholds_{timestamp}.json'
-            #     try:
-            #         with open(filename, 'w') as f:
-            #             json.dump(st.session_state.thresholds, f, indent=4)
-            #         st.sidebar.success(f'Thresholds exported to {filename}')
-            #     except Exception as e:
-            #         st.sidebar.error(f'Error exporting thresholds: {str(e)}')
 
             def prepare_export_data():
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
