@@ -203,7 +203,8 @@ def get_level_value(level):
 def determine_highest_level(row):
     """
     Determine the highest escalation level and all reasons that share that level.
-    Returns a string of all reasons that have the maximum level, joined by ' & '.
+    Returns a string of all reasons that share the maximum level, joined by ' & '.
+    'Other Business Rule' is only included if it's the sole maximum reason.
     """
     thresholds = get_applicable_thresholds(row['Country'])
     
@@ -222,6 +223,12 @@ def determine_highest_level(row):
     # Get all reasons that have the maximum level
     max_reasons = [reason for reason, value in levels if value == max_level_value]
     
+    # Handle Other Business Rule:
+    # - Remove it if there are other max reasons
+    # - Keep it only if it's the sole max reason
+    if 'Other Business Rule' in max_reasons and len(max_reasons) > 1:
+        max_reasons.remove('Other Business Rule')
+    
     # Special handling for Floor Price
     if 'Other Business Rule' in max_reasons and row.get('FP', False) == True:
         max_reasons.remove('Other Business Rule')
@@ -229,7 +236,7 @@ def determine_highest_level(row):
     
     # Join all maximum level reasons with ' & '
     return ' & '.join(max_reasons)
-
+    
 def get_approval_level(row):
     """Get approval level using the latest thresholds."""
     thresholds = get_applicable_thresholds(row['Country'])
