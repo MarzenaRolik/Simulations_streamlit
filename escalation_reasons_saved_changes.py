@@ -4,7 +4,7 @@ import plotly.express as px
 import json
 from datetime import datetime
 import plotly.io as pio
-from scipy import stats
+#from scipy import stats
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
