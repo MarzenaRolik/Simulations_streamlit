@@ -11,6 +11,9 @@ import seaborn as sns
 from scipy.stats import pearsonr
 import plotly.graph_objects as go
 import plotly.express as px
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+
 
 pio.templates[pio.templates.default].layout.colorway = ['#79cac1', '#3b9153', '#009dd2', '#f78e82', '#d774ae', '#69008c']
 
@@ -345,7 +348,7 @@ def main():
                 default=filtered_data['quote_type'].unique()
             )
             vis_selected_GM = st.sidebar.slider('Validation Check: Gross Margin Not More Than', 0, 1000, 150)
-            vis_selected_min_GM = st.sidebar.slider('Validation Check: Gross Margin Not Less Than', -1000, 0, 0)
+            vis_selected_min_GM = st.sidebar.slider('Validation Check: Gross Margin Not Less Than', -1000, 10, 10)
 
             vis_selected_quote_status = st.sidebar.multiselect(
                 'Filter by Quote Status',
@@ -742,7 +745,225 @@ def main():
                 st.pyplot(fig)
                 plt.close()
 
+                # fig = sns.pairplot(df, hue='quote_type', vars=['Deal Score', 'Deal Size', 'Gross Margin %'])
+                # st.pyplot(fig)
+                # plt.close()
+
             create_correlation_analysis(vis_data)
+
+            def analyze_approval_rules(df):
+
+                # 1. Prepare target variable (success = approved & accepted)
+                df['is_successful'] = df['status'].isin(['Approved','Accepted'])
+                #(df['Approved'] & df['Accepted']).astype(int)
+                #st.write("Initial data shape:", df.shape)
+                st.write("Success rate:", round(df['is_successful'].mean(),2))
+                #st.write("Class distribution:", df['is_successful'].value_counts())
+
+
+                # 2. Create feature matrix
+                df = df.rename(columns={'Approval_Level_Numeric': 'Approval Level', 'DS': 'Deal Score', 'Vol': 'Deal Size', 'GM': 'Gross Margin %','QuoteType__c':'Quote Type'})
+
+                X = df[['Deal Score', 'Deal Size', 'Gross Margin %']]
+                y = df['is_successful']
+                
+                    # Check for nulls
+                if X.isnull().any().any():
+                    #st.warning("Data contains null values. Cleaning...")
+                    X = X.fillna(X.mean())
+
+                # 3. Train decision tree (with controlled depth for interpretable rules)
+                #dt = DecisionTreeClassifier(max_depth=3, min_samples_leaf=2,random_state=42)
+                dt = DecisionTreeClassifier(random_state=42,max_depth=6 )
+
+                try:
+                    dt.fit(X, y)
+                    #st.success("Decision tree fitted successfully")
+                except Exception as e:
+                    st.error(f"Error fitting decision tree: {str(e)}")
+                    return None, None
+
+                try:
+                    #probs = dt.predict_proba(X)
+                    st.write(f"Number of leaves: {dt.get_n_leaves()}")
+                    #st.write("Prediction probabilities shape:", probs.shape)
+                    #st.write("Unique predicted classes:", np.unique(dt.predict(X)))
+                except Exception as e:
+                    st.error(f"Error in predictions: {str(e)}")
+                    return None, None
+                
+                # Display decision tree visualization
+                st.subheader("Decision Tree Visualization")
+                try:
+                    fig, ax = plt.subplots(figsize=(15, 10))
+                    plot_tree(dt, 
+                            feature_names=['Deal Score', 'Deal Size', 'Gross Margin %'],
+                            class_names=['Unsuccessful', 'Successful'],
+                            filled=True, 
+                            rounded=True,
+                            fontsize=10)
+                    st.pyplot(fig)
+                except Exception as e:
+                    st.error(f"Error plotting decision tree: {str(e)}")
+
+                def get_rules(tree, feature_names, class_names):
+                    tree_ = tree.tree_
+                    feature_name = [
+                        feature_names[i] if i != -2 else "undefined!"
+                        for i in tree_.feature
+                    ]
+
+                    paths = []
+                    path = []
+                    
+                    def recurse(node, path, paths):
+                        if tree_.feature[node] != -2:
+                            name = feature_name[node]
+                            threshold = tree_.threshold[node]
+                            p1, p2 = list(path), list(path)
+                            p1 += [f"({name} <= {threshold:.2f})"]
+                            recurse(tree_.children_left[node], p1, paths)
+                            p2 += [f"({name} > {threshold:.2f})"]
+                            recurse(tree_.children_right[node], p2, paths)
+                        else:
+                            path += [(tree_.value[node], tree_.n_node_samples[node])]
+                            paths += [path]
+                            
+                    recurse(0, path, paths)
+
+                    # Sort paths based on the probability of class 0 (unsuccessful)
+                    sorted_paths = sorted(paths, key=lambda x: x[-1][0][0,0] / sum(x[-1][0][0]), reverse=True)
+                    
+                    rules = []
+                    for path in sorted_paths:
+                        if path[-1][0][0,0] > path[-1][0][0,1]:  # Check if it's an unsuccessful leaf
+                            rule = "IF "
+                            for p in path[:-1]:
+                                if rule != "IF ":
+                                    rule += " AND "
+                                rule += str(p)
+                            rule += f" THEN {class_names[0]}"
+                            rules.append(rule)
+                    
+                    return rules
+
+
+                # Get feature names and class names
+                feature_names = X.columns.tolist()
+                class_names = ['Unsuccessful', 'Successful']
+
+                # Get the rules for unsuccessful leaves
+                unsuccessful_rules = get_rules(dt, feature_names, class_names)
+
+                # Print the rules
+                st.write("Rules leading to not Accepted/Approved leaves:")
+                for i, rule in enumerate(unsuccessful_rules, 1):
+                    st.write(f"{i}. {rule}")
+
+                return dt, X       
+                    
+
+            # def print_rules_summary(rules):
+            #     """Print human-readable summary of the rules"""
+            #     st.subheader("Deal Approval Rules Summary")
+                
+            #     for zone_type in ['SAFE', 'MODERATE', 'WARNING', 'HIGH RISK']:
+            #         st.write(f"\n**{zone_type} Zone Rules:**")
+            #         zone_rules = [r for r in rules if r['zone'].startswith(zone_type)]
+                    
+            #         for rule in zone_rules:
+            #             conditions = ' AND '.join(rule['conditions'])
+            #             st.write(f"- If {conditions}")
+            #             st.write(f"  * Success Rate: {rule['success_rate']:.1%}")
+            #             st.write(f"  * Based on {int(rule['samples'])} historical deals")
+
+
+
+            def create_rule_based_recommendations(df):
+                """Main function to create and display rules"""
+                st.title("Deal Acceptance Analysis")
+                
+                # Get rules and decision tree
+                dt, X = analyze_approval_rules(df)
+                
+                if dt is None:
+                    st.error("Could not create decision tree. Please check the data.")
+                    return
+
+                # Create scatter plot of deals colored by zones
+                st.subheader("Deal Distribution")
+                try:
+                    probs = dt.predict_proba(X)
+                    df['predicted_success'] = probs[:, 1]  # Probability of success
+                    
+                    # Create custom zones based on predicted probabilities
+                    df['zone'] = pd.cut(
+                        df['predicted_success'],
+                        bins=[-np.inf, 0.3, 0.6, 0.8, np.inf],
+                        labels=['High Risk', 'Warning', 'Moderate', 'Safe']
+                    )
+                    
+                    # Show distribution of zones
+                    #st.write("Distribution of deals across zones:")
+                   # st.write(df['zone'].value_counts())
+                    
+                    # Create 3D scatter plot
+                    fig = px.scatter_3d(
+                        df, 
+                        x='DS', 
+                        y='Vol', 
+                        z='GM',
+                        color='zone',
+                        color_discrete_map={
+                            'Safe': 'rgba(0, 255, 0, 0.3)',
+                            'Moderate': 'blue',
+                            'Warning': 'orange',
+                            'High Risk': 'red'
+                        },
+                        title="Deal Distribution by Risk Zones"
+                    )
+                    fig.for_each_trace(lambda trace: trace.update(visible="legendonly") 
+                        if trace.name in ['Safe'] else ())
+                    st.plotly_chart(fig)
+                    
+                except Exception as e:
+                    st.error(f"Error creating scatter plot: {str(e)}")
+
+                # Show some basic statistics for each zone
+                try:
+                    st.subheader("Zone Statistics")
+                    table_data = []
+
+                    for zone in df['zone'].unique():
+                        zone_data = df[df['zone'] == zone]
+                        table_data.append({
+                            'Zone': zone,
+                            'Number of deals': len(zone_data),
+                            'Predicted Success Prob From': f"{zone_data['predicted_success'].min():.2f}",
+                            'Predicted Success Prob To': f"{zone_data['predicted_success'].max():.2f}",
+                            'Average GM': f"{zone_data['GM'].mean():.2f}",
+                            'Average DS': f"{zone_data['DS'].mean():.2f}",
+                            'Average Vol': f"{zone_data['Vol'].mean():.2f}"
+                        })
+                    
+                    # Create a DataFrame from the table_data
+                    table_df = pd.DataFrame(table_data)
+
+                    # Display the table using Streamlit
+                    st.table(table_df)
+                    # st.subheader("Zone Statistics")
+                    # for zone in df['zone'].unique():
+                    #     zone_data = df[df['zone'] == zone]
+                    #     st.write(f"\n**{zone} Zone:**")
+                    #     st.write(f"Number of deals: {len(zone_data)}")
+                    #     st.write(f"Average GM: {zone_data['GM'].mean():.2f}")
+                    #     st.write(f"Average DS: {zone_data['DS'].mean():.2f}")
+                    #     st.write(f"Average Vol: {zone_data['Vol'].mean():.2f}")
+                except Exception as e:
+                    st.error(f"Error calculating zone statistics: {str(e)}")
+
+
+            create_rule_based_recommendations(vis_data)
 
             # Raw Data Table
             st.header('Raw Data')
