@@ -13,6 +13,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, plot_tree
+from plotly.subplots import make_subplots
 
 
 pio.templates[pio.templates.default].layout.colorway = ['#79cac1', '#3b9153', '#009dd2', '#f78e82', '#d774ae', '#69008c']
@@ -467,6 +468,25 @@ def main():
             )
             st.plotly_chart(fig6)
 
+            fig7 = px.scatter_3d(
+            vis_data, 
+            x='DS', 
+            y='Vol', 
+            z='GM',
+            color='Approval_Level',category_orders={"Approval_Level": sorted(vis_data['Approval_Level'].unique())},
+            # color_discrete_map={
+            #     'Safe': 'rgba(0, 255, 0, 0.3)',
+            #     'Moderate': 'blue',
+            #     'Warning': 'orange',
+            #     'High Risk': 'red'
+            # },
+            title="Deal Distribution by Approval Level"
+        )
+            # fig.for_each_trace(lambda trace: trace.update(visible="legendonly") 
+            #     if trace.name in ['Safe'] else ())
+            # st.plotly_chart(fig)
+            st.plotly_chart(fig7)
+
             # Cross-tabulation Table
             st.subheader('Approval Level vs Escalation Reason Cross-tabulation')
             crosstab = pd.crosstab(
@@ -547,26 +567,70 @@ def main():
                 
                 targets = ['Approval Level', 'Gross Margin %']
                 features = ['Deal Score', 'Deal Size']
-                
-                fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-                fig.suptitle('Key Feature Relationships', fontsize=16)
-                
+
+                fig = make_subplots(rows=2, cols=2, subplot_titles=[f'{feature} vs {target}' for target in targets for feature in features])
+
                 for i, target in enumerate(targets):
                     for j, feature in enumerate(features):
-                        ax = axes[i, j]
-                        sns.regplot(data=df, x=feature, y=target, ax=ax, scatter_kws={'alpha':0.5})
-                        ax.set_title(f'{feature} vs {target}')
+                        # Remove NaN values
+                        valid_data = df[[feature, target]].dropna()
                         
-                        # Add correlation coefficient
-                        corr, _ = pearsonr(df[feature], df[target])
-                        ax.text(0.05, 0.95, f'Correlation: {corr:.2f}', 
-                            transform=ax.transAxes, 
-                            fontsize=10,
-                            verticalalignment='top')
-                
-                plt.tight_layout()
-                st.pyplot(fig)
-                plt.close()
+                        # Calculate correlation
+                        corr, _ = pearsonr(valid_data[feature], valid_data[target])
+                        
+                        # Create scatter plot
+                        scatter = go.Scatter(
+                            x=valid_data[feature],
+                            y=valid_data[target],
+                            mode='markers',
+                            name=f'{feature} vs {target}',
+                            marker=dict(opacity=0.5),
+                            hovertemplate=f'{feature}: %{{x}}<br>{target}: %{{y}}<extra></extra>'
+                        )
+                        
+                        # Calculate regression line
+                        z = np.polyfit(valid_data[feature], valid_data[target], 1)
+                        p = np.poly1d(z)
+                        x_range = np.linspace(valid_data[feature].min(), valid_data[feature].max(), 100)
+                        
+                        # Create regression line
+                        line = go.Scatter(
+                            x=x_range,
+                            y=p(x_range),
+                            mode='lines',
+                            name='Regression Line',
+                            line=dict(color='red'),
+                            hoverinfo='skip'
+                        )
+                        
+                        # Add traces to subplot
+                        fig.add_trace(scatter, row=i+1, col=j+1)
+                        fig.add_trace(line, row=i+1, col=j+1)
+                        
+                        # Add correlation annotation
+                        fig.add_annotation(
+                            xref=f'x{i*2+j+1}', yref=f'y{i*2+j+1}',
+                            x=0.05, y=0.95, xanchor='left', yanchor='top',
+                            text=f'Correlation: {corr:.2f}',
+                            showarrow=False,
+                            bgcolor='rgba(255,255,255,0.8)',
+                            bordercolor='rgba(0,0,0,0.3)',
+                            borderwidth=1
+                        )
+
+                # Update layout
+                fig.update_layout(height=800, width=1000, title_text="Key Feature Relationships")
+                fig.update_xaxes(title_text="Deal Score", row=1, col=1)
+                fig.update_xaxes(title_text="Deal Size", row=1, col=2)
+                fig.update_xaxes(title_text="Deal Score", row=2, col=1)
+                fig.update_xaxes(title_text="Deal Size", row=2, col=2)
+                fig.update_yaxes(title_text="Approval Level", row=1, col=1)
+                fig.update_yaxes(title_text="Approval Level", row=1, col=2)
+                fig.update_yaxes(title_text="Gross Margin %", row=2, col=1)
+                fig.update_yaxes(title_text="Gross Margin %", row=2, col=2)
+
+                # Display the plot
+                st.plotly_chart(fig, use_container_width=True)
 
                 def create_correlation_heatmap(numeric_data):
                     """Create an interactive correlation heatmap using Plotly"""
@@ -686,41 +750,96 @@ def main():
                 plt.rcParams.update({'font.size': 9}) 
 
                 st.subheader("Target Variables by Categories")
-                
+
                 categorical_cols = ['Cluster', 'Country', 'Quote Type']
                 targets_display = ['Approval Level', 'Gross Margin %']
+                colors = ['#79cac1', '#3b9153', '#009dd2', '#f78e82', '#d774ae', '#69008c']
 
                 for target in targets_display:
-                    fig, axes = plt.subplots(1, len(categorical_cols), figsize=(20, 6))
-                    title = f'{target.replace("_Numeric", "")} Distribution by Categories'
-                    fig.suptitle(title, fontsize=16)
-                    
+                    # Create subplot with 3 columns
+                    fig = make_subplots(rows=1, cols=3, subplot_titles=categorical_cols)
+
                     for i, cat_col in enumerate(categorical_cols):
                         # Calculate statistics for each category
                         grouped_data = df.groupby(cat_col)[target]
-                        means = grouped_data.mean()
-                        sems = grouped_data.sem()  # Standard error of the mean
+                        means = grouped_data.mean().reset_index()
+                        sems = grouped_data.sem().reset_index()
                         
-                        # Create the bar plot without error bars first
-                        ax = axes[i]
-                        bars = ax.bar(range(len(means)), means)
+                        # Merge means and sems
+                        plot_data = means.merge(sems, on=cat_col, suffixes=('_mean', '_sem'))
                         
-                        # Add error bars manually
-                        ax.errorbar(range(len(means)), means, yerr=sems, fmt='none', color='black', capsize=5)
+                        # Create the bar trace
+                        trace = go.Bar(
+                            x=plot_data[cat_col],
+                            y=plot_data[f"{target}_mean"],
+                            error_y=dict(type='data', array=plot_data[f"{target}_sem"]),
+                            name=cat_col,
+                            text=plot_data[f"{target}_mean"].round(2),
+                            textposition='outside',
+                            marker_color=colors[i]
+                        )
                         
-                        # Customize the plot
-                        ax.set_title(f'{target.replace("_Numeric", "")} by {cat_col}')
-                        ax.set_xticks(range(len(means)))
-                        ax.set_xticklabels(means.index, rotation=45, ha='right')
+                        # Add the trace to the appropriate subplot
+                        fig.add_trace(trace, row=1, col=i+1)
                         
-                        # Add custom y-ticks for Approval_Level
+                        # Update layout for each subplot
+                        fig.update_xaxes(title_text=cat_col, row=1, col=i+1)
+                        fig.update_yaxes(title_text=target.replace('_Numeric', ''), row=1, col=i+1)
+                        
+                        # Customize y-axis for Approval Level
                         if target == 'Approval Level':
-                            ax.set_yticks(range(-1, 6))
-                            ax.set_yticklabels(['N/A', 'L0', 'L1', 'L2', 'L3', 'L4', 'L5'])
+                            fig.update_yaxes(tickmode='array', 
+                                            tickvals=list(range(-1, 6)),
+                                            ticktext=['N/A', 'L0', 'L1', 'L2', 'L3', 'L4', 'L5'],
+                                            row=1, col=i+1)
+
+                    # Update overall layout
+                    fig.update_layout(
+                        height=500, 
+                        width=1000,
+                        title_text=f"{target.replace('_Numeric', '')} Distribution by Categories",
+                        showlegend=False
+                    )
+
+                    # Display the plot
+                    st.plotly_chart(fig, use_container_width=True)
+
+                # st.subheader("Target Variables by Categories")
                 
-                    plt.tight_layout()
-                    st.pyplot(fig)
-                    plt.close()
+                # categorical_cols = ['Cluster', 'Country', 'Quote Type']
+                # targets_display = ['Approval Level', 'Gross Margin %']
+
+                # for target in targets_display:
+                #     fig, axes = plt.subplots(1, len(categorical_cols), figsize=(20, 6))
+                #     title = f'{target.replace("_Numeric", "")} Distribution by Categories'
+                #     fig.suptitle(title, fontsize=16)
+                    
+                #     for i, cat_col in enumerate(categorical_cols):
+                #         # Calculate statistics for each category
+                #         grouped_data = df.groupby(cat_col)[target]
+                #         means = grouped_data.mean()
+                #         sems = grouped_data.sem()  # Standard error of the mean
+                        
+                #         # Create the bar plot without error bars first
+                #         ax = axes[i]
+                #         bars = ax.bar(range(len(means)), means)
+                        
+                #         # Add error bars manually
+                #         ax.errorbar(range(len(means)), means, yerr=sems, fmt='none', color='black', capsize=5)
+                        
+                #         # Customize the plot
+                #         ax.set_title(f'{target.replace("_Numeric", "")} by {cat_col}')
+                #         ax.set_xticks(range(len(means)))
+                #         ax.set_xticklabels(means.index, rotation=45, ha='right')
+                        
+                #         # Add custom y-ticks for Approval_Level
+                #         if target == 'Approval Level':
+                #             ax.set_yticks(range(-1, 6))
+                #             ax.set_yticklabels(['N/A', 'L0', 'L1', 'L2', 'L3', 'L4', 'L5'])
+                
+                #     plt.tight_layout()
+                #     st.pyplot(fig)
+                #     plt.close()
                 
                 # 4. Time Series Analysis
                 st.subheader("Time Series Trends")
@@ -729,40 +848,189 @@ def main():
                 # Convert MonthYear to datetime if not already
                 #df['MonthYear'] = pd.to_datetime(df['MonthYear'])
                 
-                # Plot time series for both target variables
-                fig, axes = plt.subplots(2, 1, figsize=(15, 10))
+                # # Plot time series for both target variables
+                # fig, axes = plt.subplots(2, 1, figsize=(15, 10))
                 
-                for i, target in enumerate(targets):
-                    monthly_avg = df.groupby('MonthYear')[target].mean()
+                # for i, target in enumerate(targets):
+                #     monthly_avg = df.groupby('MonthYear')[target].mean()
                     
-                    axes[i].plot(monthly_avg.index, monthly_avg.values, marker='o')
-                    axes[i].set_title(f'{target} Trend Over Time')
-                    axes[i].set_xlabel('Month-Year')
-                    axes[i].set_ylabel(target)
-                    axes[i].tick_params(axis='x', rotation=45)
+                #     axes[i].plot(monthly_avg.index, monthly_avg.values, marker='o')
+                #     axes[i].set_title(f'{target} Trend Over Time')
+                #     axes[i].set_xlabel('Month-Year')
+                #     axes[i].set_ylabel(target)
+                #     axes[i].tick_params(axis='x', rotation=45)
                 
-                plt.tight_layout()
-                st.pyplot(fig)
-                plt.close()
+                # plt.tight_layout()
+                # st.pyplot(fig)
+                # plt.close()
 
+                fig = make_subplots(rows=2, cols=1, subplot_titles=[f'{target} Trend Over Time' for target in targets])
+
+                for i, target in enumerate(targets):
+                    # Calculate monthly average
+                    monthly_avg = df.groupby('MonthYear')[target].mean().reset_index()
+                    
+                    # Create line plot
+                    trace = go.Scatter(
+                        x=monthly_avg['MonthYear'],
+                        y=monthly_avg[target],
+                        mode='lines+markers',
+                        name=target,
+                        hovertemplate='%{x}<br>' + f'{target}: ' + '%{y:.2f}<extra></extra>'
+                    )
+                    
+                    # Add trace to subplot
+                    fig.add_trace(trace, row=i+1, col=1)
+                    
+                    # Update y-axis label
+                    fig.update_yaxes(title_text=target, row=i+1, col=1)
+
+                # Update layout
+                fig.update_layout(
+                    height=800, 
+                    width=1000, 
+                    title_text="Target Variables Trend Over Time",
+                    showlegend=False
+                )
+
+                # Update x-axis properties
+                fig.update_xaxes(
+                    title_text="Month-Year",
+                    tickangle=45,
+                    tickformat="%b %Y"
+                )
+
+                # Display the plot
+                st.plotly_chart(fig, use_container_width=True)
                 # fig = sns.pairplot(df, hue='quote_type', vars=['Deal Score', 'Deal Size', 'Gross Margin %'])
                 # st.pyplot(fig)
                 # plt.close()
 
             create_correlation_analysis(vis_data)
+            
+            vis_data = vis_data.rename(columns={'Approval_Level_Numeric': 'Approval Level', 'DS': 'Deal Score', 'Vol': 'Deal Size', 'GM': 'Gross Margin %','QuoteType__c':'Quote Type'})
+
+            st.title("Quote Segmentation Tool")
+            # Create two columns for weights
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                weight_gm = st.number_input("Weight for Gross Margin %", value=0.57, format="%.2f")
+            with col2:
+                weight_ds = st.number_input("Weight for Deal Size", value=0.28, format="%.2f")
+            with col3:
+                weight_dscore = st.number_input("Weight for Deal Score", value=0.15, format="%.2f")
+
+            # Create two columns for segment quantiles
+            col3, col4 = st.columns(2)
+
+            with col3:
+                quantile_a = st.number_input("Quantile for Segment A", value=0.05, format="%.2f", min_value=0.01)
+                quantile_b = st.number_input("Quantile for Segment B", value=0.20, format="%.2f", min_value=quantile_a + 0.01)
+
+            with col4:
+                quantile_c = st.number_input("Quantile for Segment C", value=0.50, format="%.2f", min_value=quantile_b + 0.01)
+                quantile_d = st.number_input("Quantile for Segment D", value=0.80, format="%.2f", min_value=quantile_c + 0.01)
+
+            # Step to ensure valid weights and quantiles
+            if weight_gm + weight_ds + weight_dscore != 1.0:
+                st.error("The sum of weights must equal to 1. Please adjust the values.")
+                st.stop()
+
+            # Step to ensure valid quantiles
+            if not (0 < quantile_a < quantile_b < quantile_c < quantile_d < 1):
+                st.error("Quantiles must be between (0 and 1) and in increasing order.")
+                st.stop()
+            # # User inputs for weights
+            # weight_gm = st.slider("Weight for Gross Margin %", min_value=0.0, max_value=1.0, value=0.57)
+            # weight_ds = st.slider("Weight for Deal Size", min_value=0.0, max_value=1.0 - weight_gm, value=0.28)
+            # weight_dscore = st.slider("Weight for Deal Score", min_value=0.0, max_value=1.0 - (weight_gm + weight_ds), value=0.15)
+
+            # # User inputs for segment quantiles
+            # quantile_a = st.slider("Quantile for Segment A", min_value=0.01, max_value=0.99, value=0.20)
+            # quantile_b = st.slider("Quantile for Segment B", min_value=quantile_a + 0.01, max_value=0.99 - (quantile_a + 0.01), value=0.40)
+            # quantile_c = st.slider("Quantile for Segment C", min_value=quantile_b + 0.01, max_value=0.99 - (quantile_a + quantile_b + 0.01), value=0.60)
+            # quantile_d = st.slider("Quantile for Segment D", min_value=quantile_c + 0.01, max_value=1.00 - (quantile_a + quantile_b + quantile_c + 0.01), value=0.80)
+
+            # Step 1: Rank each parameter
+            vis_data['GM_rank'] = vis_data['Gross Margin %'].rank(ascending=True)
+            vis_data['DS_rank'] = vis_data['Deal Size'].rank(ascending=False)
+            vis_data['DScore_rank'] = vis_data['Deal Score'].rank(ascending=True)
+
+            # Step 2: Normalize ranks to a scale of 0 to 100
+            vis_data['GM_rank_norm'] = (vis_data['GM_rank'] / vis_data['GM_rank'].max()) * 100
+            vis_data['DS_rank_norm'] = (vis_data['DS_rank'] / vis_data['DS_rank'].max()) * 100
+            vis_data['DScore_rank_norm'] = (vis_data['DScore_rank'] / vis_data['DScore_rank'].max()) * 100
+
+            # Step 3: Calculate the final score for segmentation
+            vis_data['Score'] = (weight_ds * vis_data['DS_rank_norm'] + 
+                        weight_dscore * vis_data['DScore_rank_norm'] + 
+                        weight_gm * vis_data['GM_rank_norm'])
+
+            # Step 4: Define segment boundaries based on user-defined quantiles
+            segment_boundaries = {
+                'Segment A': vis_data['Score'].quantile(quantile_a),
+                'Segment B': vis_data['Score'].quantile(quantile_b),
+                'Segment C': vis_data['Score'].quantile(quantile_c),
+                'Segment D': vis_data['Score'].quantile(quantile_d),
+                'Segment E': vis_data['Score'].max()   # Last segment includes everything above Segment D
+            }
+
+            # Assign segments based on score
+            def assign_segment(score):
+                if score <= segment_boundaries['Segment A']:
+                    return 'Segment A'
+                elif score <= segment_boundaries['Segment B']:
+                    return 'Segment B'
+                elif score <= segment_boundaries['Segment C']:
+                    return 'Segment C'
+                elif score <= segment_boundaries['Segment D']:
+                    return 'Segment D'
+                else:
+                    return 'Segment E'
+
+            vis_data['Segment'] = vis_data['Score'].apply(assign_segment)
+            
+            col1, col2 = st.columns(2)
+
+            with col1:
+                level_counts = vis_data['Segment'].value_counts()
+                fig1 = px.pie(
+                    values=level_counts.values,
+                    names=level_counts.index,
+                    title=f'Distribution of Segments ({len(vis_data)} deals)',
+                    category_orders={"names": sorted(level_counts.index, reverse=True)}
+                )
+                st.plotly_chart(fig1)
+
+            # Create 3D scatter plot
+            with col2:
+                fig2 = px.scatter_3d(
+                    vis_data, 
+                    x='Deal Score', 
+                    y='Deal Size', 
+                    z='Gross Margin %',
+                    color='Segment',category_orders={"Segment": sorted(vis_data['Segment'].unique(), reverse=True)},
+
+                    title="Deal Distribution by Segments"
+                )
+                st.plotly_chart(fig2)
+
+            # Display the segmented DataFrame in Streamlit
+            st.write(vis_data[['Gross Margin %', 'Deal Size', 'Deal Score', 
+                        'GM_rank_norm', 'DS_rank_norm', 'DScore_rank_norm', 
+                        'Score', 'Segment']])
 
             def analyze_approval_rules(df):
 
                 # 1. Prepare target variable (success = approved & accepted)
-                df['is_successful'] = df['status'].isin(['Approved','Accepted'])
-                #(df['Approved'] & df['Accepted']).astype(int)
-                #st.write("Initial data shape:", df.shape)
                 st.write("Success rate:", round(df['is_successful'].mean(),2))
                 #st.write("Class distribution:", df['is_successful'].value_counts())
 
 
                 # 2. Create feature matrix
-                df = df.rename(columns={'Approval_Level_Numeric': 'Approval Level', 'DS': 'Deal Score', 'Vol': 'Deal Size', 'GM': 'Gross Margin %','QuoteType__c':'Quote Type'})
+                #df = df.rename(columns={'Approval_Level_Numeric': 'Approval Level', 'DS': 'Deal Score', 'Vol': 'Deal Size', 'GM': 'Gross Margin %','QuoteType__c':'Quote Type'})
+                #df = df[['Deal Score', 'Deal Size', 'Gross Margin %','is_successful']].dropna()
 
                 X = df[['Deal Score', 'Deal Size', 'Gross Margin %']]
                 y = df['is_successful']
@@ -774,7 +1042,7 @@ def main():
 
                 # 3. Train decision tree (with controlled depth for interpretable rules)
                 #dt = DecisionTreeClassifier(max_depth=3, min_samples_leaf=2,random_state=42)
-                dt = DecisionTreeClassifier(random_state=42,max_depth=6 )
+                dt = DecisionTreeClassifier(random_state=42,max_depth=5, min_samples_leaf=10, min_samples_split=10)
 
                 try:
                     dt.fit(X, y)
@@ -883,6 +1151,13 @@ def main():
                 """Main function to create and display rules"""
                 st.title("Deal Acceptance Analysis")
                 
+                df['is_successful'] = df['status'].isin(['Approved','Accepted'])
+                df = df.loc[df['status'].isin(['Approved','Accepted', 'Rejected','Declined'])]
+
+                df = df.rename(columns={'Approval_Level_Numeric': 'Approval Level', 'DS': 'Deal Score', 'Vol': 'Deal Size', 'GM': 'Gross Margin %','QuoteType__c':'Quote Type'})
+
+                df = df[['Deal Score', 'Deal Size', 'Gross Margin %','is_successful']].dropna()
+
                 # Get rules and decision tree
                 dt, X = analyze_approval_rules(df)
                 
@@ -910,9 +1185,9 @@ def main():
                     # Create 3D scatter plot
                     fig = px.scatter_3d(
                         df, 
-                        x='DS', 
-                        y='Vol', 
-                        z='GM',
+                        x='Deal Score', 
+                        y='Deal Size', 
+                        z='Gross Margin %',
                         color='zone',
                         color_discrete_map={
                             'Safe': 'rgba(0, 255, 0, 0.3)',
@@ -941,9 +1216,9 @@ def main():
                             'Number of deals': len(zone_data),
                             'Predicted Success Prob From': f"{zone_data['predicted_success'].min():.2f}",
                             'Predicted Success Prob To': f"{zone_data['predicted_success'].max():.2f}",
-                            'Average GM': f"{zone_data['GM'].mean():.2f}",
-                            'Average DS': f"{zone_data['DS'].mean():.2f}",
-                            'Average Vol': f"{zone_data['Vol'].mean():.2f}"
+                            'Average Gross Margin %': f"{zone_data['Gross Margin %'].mean():.2f}",
+                            'Average Deal Score': f"{zone_data['Deal Score'].mean():.2f}",
+                            'Average Deal Size': f"{zone_data['Deal Size'].mean():.2f}"
                         })
                     
                     # Create a DataFrame from the table_data
