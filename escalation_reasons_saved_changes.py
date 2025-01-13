@@ -910,106 +910,107 @@ def main():
             
             vis_data = vis_data.rename(columns={'Approval_Level_Numeric': 'Approval Level', 'DS': 'Deal Score', 'Vol': 'Deal Size', 'GM': 'Gross Margin %','QuoteType__c':'Quote Type'})
 
-            st.title("Quote Segmentation Tool")
-            # Create two columns for weights
-            col1, col2, col3 = st.columns(3)
+            def segmentation_tool(vis_data):
+                st.title("Quote Segmentation Tool")
+                # Create two columns for weights
+                col1, col2, col3 = st.columns(3)
 
-            with col1:
-                weight_gm = st.number_input("Weight for Gross Margin %", value=0.57, format="%.2f")
-            with col2:
-                weight_ds = st.number_input("Weight for Deal Size", value=0.28, format="%.2f")
-            with col3:
-                weight_dscore = st.number_input("Weight for Deal Score", value=0.15, format="%.2f")
+                with col1:
+                    weight_gm = st.number_input("Weight for Gross Margin %", value=0.57, format="%.2f")
+                with col2:
+                    weight_ds = st.number_input("Weight for Deal Size", value=0.28, format="%.2f")
+                with col3:
+                    weight_dscore = st.number_input("Weight for Deal Score", value=0.15, format="%.2f")
 
-            # Create two columns for segment quantiles
-            col3, col4 = st.columns(2)
+                # Create two columns for segment quantiles
+                col3, col4 = st.columns(2)
 
-            with col3:
-                quantile_a = st.number_input("Quantile for Segment A", value=0.05, format="%.2f", min_value=0.01)
-                quantile_b = st.number_input("Quantile for Segment B", value=0.20, format="%.2f", min_value=quantile_a + 0.01)
+                with col3:
+                    quantile_a = st.number_input("Quantile for Segment A", value=0.05, format="%.2f", min_value=0.01)
+                    quantile_b = st.number_input("Quantile for Segment B", value=0.20, format="%.2f", min_value=quantile_a + 0.01)
 
-            with col4:
-                quantile_c = st.number_input("Quantile for Segment C", value=0.50, format="%.2f", min_value=quantile_b + 0.01)
-                quantile_d = st.number_input("Quantile for Segment D", value=0.80, format="%.2f", min_value=quantile_c + 0.01)
+                with col4:
+                    quantile_c = st.number_input("Quantile for Segment C", value=0.50, format="%.2f", min_value=quantile_b + 0.01)
+                    quantile_d = st.number_input("Quantile for Segment D", value=0.80, format="%.2f", min_value=quantile_c + 0.01)
 
-            # Step to ensure valid weights and quantiles
-            if weight_gm + weight_ds + weight_dscore != 1.0:
-                st.error("The sum of weights must equal to 1. Please adjust the values.")
-                st.stop()
+                # Step to ensure valid weights and quantiles
+                if weight_gm + weight_ds + weight_dscore != 1.0:
+                    st.error("The sum of weights must equal to 1. Please adjust the values.")
+                    st.stop()
 
-            # Step to ensure valid quantiles
-            if not (0 < quantile_a < quantile_b < quantile_c < quantile_d < 1):
-                st.error("Quantiles must be between (0 and 1) and in increasing order.")
-                st.stop()
-            
-            # Step 1: Rank each parameter
-            vis_data['GM_rank'] = vis_data['Gross Margin %'].rank(ascending=True)
-            vis_data['DS_rank'] = vis_data['Deal Size'].rank(ascending=False)
-            vis_data['DScore_rank'] = vis_data['Deal Score'].rank(ascending=True)
+                # Step to ensure valid quantiles
+                if not (0 < quantile_a < quantile_b < quantile_c < quantile_d < 1):
+                    st.error("Quantiles must be between (0 and 1) and in increasing order.")
+                    st.stop()
+                
+                # Step 1: Rank each parameter
+                vis_data['GM_rank'] = vis_data['Gross Margin %'].rank(ascending=True)
+                vis_data['DS_rank'] = vis_data['Deal Size'].rank(ascending=False)
+                vis_data['DScore_rank'] = vis_data['Deal Score'].rank(ascending=True)
 
-            # Step 2: Normalize ranks to a scale of 0 to 100
-            vis_data['GM_rank_norm'] = (vis_data['GM_rank'] / vis_data['GM_rank'].max()) * 100
-            vis_data['DS_rank_norm'] = (vis_data['DS_rank'] / vis_data['DS_rank'].max()) * 100
-            vis_data['DScore_rank_norm'] = (vis_data['DScore_rank'] / vis_data['DScore_rank'].max()) * 100
+                # Step 2: Normalize ranks to a scale of 0 to 100
+                vis_data['GM_rank_norm'] = (vis_data['GM_rank'] / vis_data['GM_rank'].max()) * 100
+                vis_data['DS_rank_norm'] = (vis_data['DS_rank'] / vis_data['DS_rank'].max()) * 100
+                vis_data['DScore_rank_norm'] = (vis_data['DScore_rank'] / vis_data['DScore_rank'].max()) * 100
 
-            # Step 3: Calculate the final score for segmentation
-            vis_data['Score'] = (weight_ds * vis_data['DS_rank_norm'] + 
-                        weight_dscore * vis_data['DScore_rank_norm'] + 
-                        weight_gm * vis_data['GM_rank_norm'])
+                # Step 3: Calculate the final score for segmentation
+                vis_data['Score'] = (weight_ds * vis_data['DS_rank_norm'] + 
+                            weight_dscore * vis_data['DScore_rank_norm'] + 
+                            weight_gm * vis_data['GM_rank_norm'])
 
-            # Step 4: Define segment boundaries based on user-defined quantiles
-            segment_boundaries = {
-                'Segment A': vis_data['Score'].quantile(quantile_a),
-                'Segment B': vis_data['Score'].quantile(quantile_b),
-                'Segment C': vis_data['Score'].quantile(quantile_c),
-                'Segment D': vis_data['Score'].quantile(quantile_d),
-                'Segment E': vis_data['Score'].max()   # Last segment includes everything above Segment D
-            }
+                # Step 4: Define segment boundaries based on user-defined quantiles
+                segment_boundaries = {
+                    'Segment A': vis_data['Score'].quantile(quantile_a),
+                    'Segment B': vis_data['Score'].quantile(quantile_b),
+                    'Segment C': vis_data['Score'].quantile(quantile_c),
+                    'Segment D': vis_data['Score'].quantile(quantile_d),
+                    'Segment E': vis_data['Score'].max()   # Last segment includes everything above Segment D
+                }
 
-            # Assign segments based on score
-            def assign_segment(score):
-                if score <= segment_boundaries['Segment A']:
-                    return 'Segment A'
-                elif score <= segment_boundaries['Segment B']:
-                    return 'Segment B'
-                elif score <= segment_boundaries['Segment C']:
-                    return 'Segment C'
-                elif score <= segment_boundaries['Segment D']:
-                    return 'Segment D'
-                else:
-                    return 'Segment E'
+                # Assign segments based on score
+                def assign_segment(score):
+                    if score <= segment_boundaries['Segment A']:
+                        return 'Segment A'
+                    elif score <= segment_boundaries['Segment B']:
+                        return 'Segment B'
+                    elif score <= segment_boundaries['Segment C']:
+                        return 'Segment C'
+                    elif score <= segment_boundaries['Segment D']:
+                        return 'Segment D'
+                    else:
+                        return 'Segment E'
 
-            vis_data['Segment'] = vis_data['Score'].apply(assign_segment)
-            
-            col1, col2 = st.columns(2)
+                vis_data['Segment'] = vis_data['Score'].apply(assign_segment)
+                
+                col1, col2 = st.columns(2)
 
-            with col1:
-                level_counts = vis_data['Segment'].value_counts()
-                fig1 = px.pie(
-                    values=level_counts.values,
-                    names=level_counts.index,
-                    title=f'Distribution of Segments ({len(vis_data)} deals)',
-                    category_orders={"names": sorted(level_counts.index, reverse=True)}
-                )
-                st.plotly_chart(fig1)
+                with col1:
+                    level_counts = vis_data['Segment'].value_counts()
+                    fig1 = px.pie(
+                        values=level_counts.values,
+                        names=level_counts.index,
+                        title=f'Distribution of Segments ({len(vis_data)} deals)',
+                        category_orders={"names": sorted(level_counts.index, reverse=True)}
+                    )
+                    st.plotly_chart(fig1)
 
-            # Create 3D scatter plot
-            with col2:
-                fig2 = px.scatter_3d(
-                    vis_data, 
-                    x='Deal Score', 
-                    y='Deal Size', 
-                    z='Gross Margin %',
-                    color='Segment',category_orders={"Segment": sorted(vis_data['Segment'].unique(), reverse=True)},
+                # Create 3D scatter plot
+                with col2:
+                    fig2 = px.scatter_3d(
+                        vis_data, 
+                        x='Deal Score', 
+                        y='Deal Size', 
+                        z='Gross Margin %',
+                        color='Segment',category_orders={"Segment": sorted(vis_data['Segment'].unique(), reverse=True)},
 
-                    title="Deal Distribution by Segments"
-                )
-                st.plotly_chart(fig2)
+                        title="Deal Distribution by Segments"
+                    )
+                    st.plotly_chart(fig2)
 
-            # Display the segmented DataFrame in Streamlit
-            st.write(vis_data[['Gross Margin %', 'Deal Size', 'Deal Score', 
-                        'GM_rank_norm', 'DS_rank_norm', 'DScore_rank_norm', 
-                        'Score', 'Segment']])
+                # Display the segmented DataFrame in Streamlit
+                st.write(vis_data[['Gross Margin %', 'Deal Size', 'Deal Score', 
+                            'GM_rank_norm', 'DS_rank_norm', 'DScore_rank_norm', 
+                            'Score', 'Segment']])
 
             def analyze_approval_rules(df):
 
@@ -1342,8 +1343,8 @@ def main():
                 # except Exception as e:
                 #     st.error(f"Error calculating zone statistics: {str(e)}")
 
-
-            create_rule_based_recommendations(vis_data)
+            # segmentation_tool(vis_data)
+            # create_rule_based_recommendations(vis_data)
 
             # Raw Data Table
             st.header('Raw Data')
