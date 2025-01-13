@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 from scipy.stats import pearsonr
+import plotly.graph_objects as go
+import plotly.express as px
 
 pio.templates[pio.templates.default].layout.colorway = ['#79cac1', '#3b9153', '#009dd2', '#f78e82', '#d774ae', '#69008c']
 
@@ -563,28 +565,119 @@ def main():
                 st.pyplot(fig)
                 plt.close()
 
-                # 2. Correlation Matrix Heatmap
-                st.subheader("Correlation Matrix Heatmap")
-                corr_matrix = numeric_data.corr()
+                def create_correlation_heatmap(numeric_data):
+                    """Create an interactive correlation heatmap using Plotly"""
+                    corr_matrix = numeric_data.corr()
+                    
+                    # # Create mask for upper triangle
+                    # mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+                    
+                    # # Convert to array and mask upper triangle
+                    # z = np.array(corr_matrix)
+                    # z[mask] = np.nan
+                    
+                    # Create hover text
+                    hover_text = [[f'{col1} vs {col2}<br>Correlation: {val:.2f}'
+                                for col2, val in zip(corr_matrix.columns, row)]
+                                for col1, row in zip(corr_matrix.index, corr_matrix.values)]
+                    
+                    # Create heatmap
+                    fig = go.Figure(data=go.Heatmap(
+                        z=corr_matrix,
+                        x=corr_matrix.columns,
+                        y=corr_matrix.index,
+                        zmin=-1,
+                        zmax=1,
+                        text=np.around(corr_matrix, decimals=2),
+                        texttemplate='%{text}',
+                        textfont={"size": 10},
+                        hoverongaps=False,
+                        hoverinfo='text',
+                        hovertext=hover_text,
+                        colorscale='RdBu',
+                        colorbar=dict(
+                            title='Correlation',
+                            titleside='right',
+                            thickness=15,
+                            len=0.5,
+                            x=1.1
+                        )
+                    ))
+                    
+                    # Update layout
+                    fig.update_layout(
+                        title=dict(
+                            text='Feature Correlation Matrix',
+                            x=0.5,
+                            y=0.95,
+                            font=dict(size=16)
+                        ),
+                        width=600,
+                        height=500,
+                        xaxis_showgrid=False,
+                        yaxis_showgrid=False,
+                        xaxis_title=None,
+                        yaxis_title=None,
+                        showlegend=False,
+                        xaxis={'side': 'bottom'}
+                    )
+                    
+                    return fig, corr_matrix
+                
+                fig, corr_matrix = create_correlation_heatmap(numeric_data)
+                st.plotly_chart(fig, use_container_width=True)
 
-                plt.rcParams.update({'font.size': 3}) 
-                plt.figure(figsize=(1.5, 1.5))
-                sns.heatmap(corr_matrix, 
-                            annot=True, 
-                            cmap='coolwarm', 
-                            center=0,
-                            fmt='.2f',
-                            square=True,
-                            annot_kws={'size': 3},
-                            cbar_kws={'label': 'Correlation', 'shrink': .8})
-                # Adjust tick label sizes
-                plt.tick_params(axis='both', which='major', labelsize=3)  # Adjust this value as needed
+                gm_correlations = corr_matrix['Gross Margin %'].drop('Gross Margin %')
+                approval_correlations = corr_matrix['Approval Level'].drop('Approval Level')
+                
+                # Function to describe correlation strength
+                def describe_correlation(value):
+                    abs_val = abs(value)
+                    if abs_val >= 0.7:
+                        return "very strong"
+                    elif abs_val >= 0.5:
+                        return "strong"
+                    elif abs_val >= 0.3:
+                        return "moderate"
+                    elif abs_val >= 0.1:
+                        return "weak"
+                    else:
+                        return "very weak"
+                
+                # Analyze GM correlations
+                gm_insights = []
+                for feature, corr in gm_correlations.items():
+                    if abs(corr) >= 0.1:  # Only include meaningful correlations
+                        direction = "positive" if corr > 0 else "negative"
+                        strength = describe_correlation(corr)
+                        gm_insights.append(f"- {feature} shows a {strength} {direction} correlation ({corr:.2f}) with Gross Margin")
+                
+                # Analyze Approval Level correlations
+                approval_insights = []
+                for feature, corr in approval_correlations.items():
+                    if abs(corr) >= 0.1:  # Only include meaningful correlations
+                        direction = "positive" if corr > 0 else "negative"
+                        strength = describe_correlation(corr)
+                        approval_insights.append(f"- {feature} shows a {strength} {direction} correlation ({corr:.2f}) with Approval Level")
+                
+                #return gm_insights, approval_insights
 
-                # Adjust colorbar label size
-                plt.gcf().axes[-1].yaxis.label.set_size(3)
-                #plt.title('Correlation Matrix of Numerical Features')
-                st.pyplot(plt.gcf())
-                plt.close()
+
+                # Add correlation insights
+                st.subheader("Key Correlation Insights")
+                #gm_insights, approval_insights = analyze_correlations(corr_matrix)
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write("**Gross Margin Correlations:**")
+                    for insight in gm_insights:
+                        st.write(insight)
+                        
+                with col2:
+                    st.write("**Approval Level Correlations:**")
+                    for insight in approval_insights:
+                        st.write(insight)
                                 
                 # 3. Categorical Analysis
                 plt.rcParams.update({'font.size': 9}) 
