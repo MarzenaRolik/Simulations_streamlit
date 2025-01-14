@@ -14,7 +14,9 @@ import plotly.express as px
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, plot_tree, export_text
 from plotly.subplots import make_subplots
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+
 
 pio.templates[pio.templates.default].layout.colorway = ['#79cac1', '#3b9153', '#009dd2', '#f78e82', '#d774ae', '#69008c']
 
@@ -391,6 +393,7 @@ def main():
 
             # --- Visualizations ---
             st.header('Visualizations')
+            vis_data = vis_data.rename(columns={'Approval_Level_Numeric': 'Approval Level', 'DS': 'Deal Score', 'Vol': 'Deal Size', 'GM': 'Gross Margin %','QuoteType__c':'Quote Type'})
 
             # First Row: Approval Level and Escalation Distributions
             col1, col2 = st.columns(2)
@@ -425,10 +428,10 @@ def main():
                 # Scatter plot with Volume vs GM colored by Approval Level
                 fig3 = px.scatter(
                     vis_data,
-                    x='Vol',
-                    y='GM',
+                    x='Deal Size',
+                    y='Gross Margin %',
                     color='Approval_Level',
-                    title='Volume vs Gross Margin by Approval Level',
+                    title='Deal Size vs Gross Margin by Approval Level',
                     category_orders={"Approval_Level": sorted(vis_data['Approval_Level'].unique())},                    log_x=True
                 )
                 st.plotly_chart(fig3)
@@ -437,10 +440,10 @@ def main():
                 # Scatter plot with Volume vs GM colored by Escalation Reason
                 fig4 = px.scatter(
                     vis_data,
-                    x='Vol',
-                    y='GM',
+                    x='Deal Size',
+                    y='Gross Margin %',
                     color='Final_Escalation',
-                    title='Volume vs Gross Margin by Escalation Reason',
+                    title='Deal Size vs Gross Margin by Escalation Reason',
                     category_orders={"Final_Escalation": sorted(vis_data['Final_Escalation'].unique())},
                     log_x=True
                 )
@@ -459,7 +462,7 @@ def main():
 
             fig6 = px.histogram(
                 vis_data,
-                x='DS',
+                x='Deal Score',
                 color='Approval_Level',
                 title='Deal Score Distribution by Final Approval Level',
                 category_orders={"Approval_Level": sorted(vis_data['Approval_Level'].unique())},
@@ -470,21 +473,13 @@ def main():
 
             fig7 = px.scatter_3d(
             vis_data, 
-            x='DS', 
-            y='Vol', 
-            z='GM',
+            x='Deal Score', 
+            y='Deal Size', 
+            z='Gross Margin %',
             color='Approval_Level',category_orders={"Approval_Level": sorted(vis_data['Approval_Level'].unique())},
-            # color_discrete_map={
-            #     'Safe': 'rgba(0, 255, 0, 0.3)',
-            #     'Moderate': 'blue',
-            #     'Warning': 'orange',
-            #     'High Risk': 'red'
-            # },
             title="Deal Distribution by Approval Level"
         )
-            # fig.for_each_trace(lambda trace: trace.update(visible="legendonly") 
-            #     if trace.name in ['Safe'] else ())
-            # st.plotly_chart(fig)
+
             st.plotly_chart(fig7)
 
             # Cross-tabulation Table
@@ -499,21 +494,21 @@ def main():
             # Summary Statistics
             st.subheader('Summary by Approval Level')
             summary_stats = vis_data.groupby('Approval_Level').agg({
-                'Vol': ['count', 'mean', 'median', 'sum'],
-                'GM': ['mean', 'median'],
-                'DS': ['mean', 'median']
+                'Deal Size': ['count', 'mean', 'median', 'sum'],
+                'Gross Margin %': ['mean', 'median'],
+                'Deal Score': ['mean', 'median']
             }).round(0)
             
             # Calculate totals with matching MultiIndex structure
             total_stats = pd.DataFrame([
-                [int(vis_data['Vol'].count()), 
-                round(vis_data['Vol'].mean(), 0), 
-                round(vis_data['Vol'].median(), 0),
-                round(vis_data['Vol'].sum(), 0),
-                round(vis_data['GM'].mean(), 0), 
-                round(vis_data['GM'].median(), 0),
-                round(vis_data['DS'].mean(), 0), 
-                round(vis_data['DS'].median(), 0)]
+                [int(vis_data['Deal Size'].count()), 
+                round(vis_data['Deal Size'].mean(), 0), 
+                round(vis_data['Deal Size'].median(), 0),
+                round(vis_data['Deal Size'].sum(), 0),
+                round(vis_data['Gross Margin %'].mean(), 0), 
+                round(vis_data['Gross Margin %'].median(), 0),
+                round(vis_data['Deal Score'].mean(), 0), 
+                round(vis_data['Deal Score'].median(), 0)]
             ], columns=summary_stats.columns, index=pd.Index(['Total']))
 
             # Combine the grouped stats with the total row
@@ -523,7 +518,6 @@ def main():
             def format_eur(x):
                 return f"€{x:,.0f}".replace(',', '.')
             
-            # Rename the columns for clarity
             summary_stats.columns = [
                 'Count', 'Avg Volume', 'Median Volume', 'Total Sales',
                 'Avg Gross Margin %', 'Median Gross Margin %',
@@ -912,26 +906,34 @@ def main():
 
             def segmentation_tool(vis_data):
                 st.title("Quote Segmentation Tool")
+                st.write("""
+                         This tool combines user control with automated analysis by allowing manual weight assignment to features and desired segment sizes, creating a weighted scoring system based on normalized rankings. 
+                         After segmenting the data according to these user-defined parameters, it employs a classification model to discover and extract the underlying rules that characterize each segment, 
+                         making the complex segmentation logic interpretable and actionable.
+                         """)
+                st.write("Set Feature Priority Weights:")
                 # Create two columns for weights
                 col1, col2, col3 = st.columns(3)
 
                 with col1:
-                    weight_gm = st.number_input("Weight for Gross Margin %", value=0.57, format="%.2f")
+                    weight_gm = st.number_input("Weight for Gross Margin %", value=0.6, format="%.2f")
                 with col2:
-                    weight_ds = st.number_input("Weight for Deal Size", value=0.28, format="%.2f")
+                    weight_ds = st.number_input("Weight for Deal Size", value=0.25, format="%.2f")
                 with col3:
                     weight_dscore = st.number_input("Weight for Deal Score", value=0.15, format="%.2f")
+
+                st.write("Define Desired Segment Sizes by Quantile Thresholds :")
 
                 # Create two columns for segment quantiles
                 col3, col4 = st.columns(2)
 
                 with col3:
-                    quantile_a = st.number_input("Quantile for Segment A", value=0.05, format="%.2f", min_value=0.01)
-                    quantile_b = st.number_input("Quantile for Segment B", value=0.20, format="%.2f", min_value=quantile_a + 0.01)
+                    quantile_a = st.number_input("Quantile for Segment 5", value=0.05, format="%.2f", min_value=0.01)
+                    quantile_b = st.number_input("Quantile for Segment 4", value=0.20, format="%.2f", min_value=quantile_a + 0.01)
 
                 with col4:
-                    quantile_c = st.number_input("Quantile for Segment C", value=0.50, format="%.2f", min_value=quantile_b + 0.01)
-                    quantile_d = st.number_input("Quantile for Segment D", value=0.80, format="%.2f", min_value=quantile_c + 0.01)
+                    quantile_c = st.number_input("Quantile for Segment 3", value=0.50, format="%.2f", min_value=quantile_b + 0.01)
+                    quantile_d = st.number_input("Quantile for Segment 2", value=0.80, format="%.2f", min_value=quantile_c + 0.01)
 
                 # Step to ensure valid weights and quantiles
                 if weight_gm + weight_ds + weight_dscore != 1.0:
@@ -958,27 +960,27 @@ def main():
                             weight_dscore * vis_data['DScore_rank_norm'] + 
                             weight_gm * vis_data['GM_rank_norm'])
 
-                # Step 4: Define segment boundaries based on user-defined quantiles
+                # Step 4: Define Segment 4oundaries based on user-defined quantiles
                 segment_boundaries = {
-                    'Segment A': vis_data['Score'].quantile(quantile_a),
-                    'Segment B': vis_data['Score'].quantile(quantile_b),
-                    'Segment C': vis_data['Score'].quantile(quantile_c),
-                    'Segment D': vis_data['Score'].quantile(quantile_d),
-                    'Segment E': vis_data['Score'].max()   # Last segment includes everything above Segment D
+                    'Segment 5': vis_data['Score'].quantile(quantile_a),
+                    'Segment 4': vis_data['Score'].quantile(quantile_b),
+                    'Segment 3': vis_data['Score'].quantile(quantile_c),
+                    'Segment 2': vis_data['Score'].quantile(quantile_d),
+                    'Segment 1': vis_data['Score'].max()   # Last segment includes everything above Segment 2
                 }
 
                 # Assign segments based on score
                 def assign_segment(score):
-                    if score <= segment_boundaries['Segment A']:
-                        return 'Segment A'
-                    elif score <= segment_boundaries['Segment B']:
-                        return 'Segment B'
-                    elif score <= segment_boundaries['Segment C']:
-                        return 'Segment C'
-                    elif score <= segment_boundaries['Segment D']:
-                        return 'Segment D'
+                    if score <= segment_boundaries['Segment 5']:
+                        return 'Segment 5'
+                    elif score <= segment_boundaries['Segment 4']:
+                        return 'Segment 4'
+                    elif score <= segment_boundaries['Segment 3']:
+                        return 'Segment 3'
+                    elif score <= segment_boundaries['Segment 2']:
+                        return 'Segment 2'
                     else:
-                        return 'Segment E'
+                        return 'Segment 1'
 
                 vis_data['Segment'] = vis_data['Score'].apply(assign_segment)
                 
@@ -989,8 +991,8 @@ def main():
                     fig1 = px.pie(
                         values=level_counts.values,
                         names=level_counts.index,
-                        title=f'Distribution of Segments ({len(vis_data)} deals)',
-                        category_orders={"names": sorted(level_counts.index, reverse=True)}
+                        title=f'Distribution of Calculated Segments ({len(vis_data)} deals)',
+                        category_orders={"names": sorted(level_counts.index, reverse=False)}
                     )
                     st.plotly_chart(fig1)
 
@@ -1001,16 +1003,16 @@ def main():
                         x='Deal Score', 
                         y='Deal Size', 
                         z='Gross Margin %',
-                        color='Segment',category_orders={"Segment": sorted(vis_data['Segment'].unique(), reverse=True)},
+                        color='Segment',category_orders={"Segment": sorted(vis_data['Segment'].unique(), reverse=False)},
 
-                        title="Deal Distribution by Segments"
+                        title="Deal Distribution by Calculated Segments"
                     )
                     st.plotly_chart(fig2)
 
                 # Display the segmented DataFrame in Streamlit
                 st.write(vis_data[['Gross Margin %', 'Deal Size', 'Deal Score', 
                             'GM_rank_norm', 'DS_rank_norm', 'DScore_rank_norm', 
-                            'Score', 'Segment']])
+                            'Score', 'Segment', 'Country', 'Approval Level']])
 
             def analyze_approval_rules(df):
 
@@ -1021,13 +1023,12 @@ def main():
                 # Features and target
                 X = df[['Gross Margin %', 'Deal Size', 'Deal Score']]
                 y = df['Segment_encoded']
-
-                # Split the data into training and testing sets
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+                
+                max_depth = st.number_input("Tree Complexity Level - Set how many layers of rules to create. More layers mean more precise but complex patterns", value=3,  min_value=1)
 
                 # Train a Decision Tree Classifier
-                clf = DecisionTreeClassifier(random_state=42,max_depth=5 )
-                clf.fit(X_train, y_train)
+                clf = DecisionTreeClassifier(random_state=42,max_depth=max_depth)
+                clf.fit(X, y)
 
                 # Visualize the Decision Tree
                 fig, ax = plt.subplots(figsize=(15, 10))
@@ -1041,71 +1042,8 @@ def main():
                 st.pyplot(fig)
                 plt.show()
 
-                rules = export_text(clf,
-                                    feature_names=list(X.columns))
-
                 # Streamlit UI for user input
                 st.title("Decision Rules for Quote Segmentation")
-
-                # # User input for segment selection
-                # selected_segment = st.selectbox("Select a Segment", label_encoder.classes_)
-
-                # # # Print all rules
-                # st.write("All Decision Rules:")
-                # st.text(rules)
-
-                # Decode selected segment
-                #selected_segment_encoded = label_encoder.transform([selected_segment])[0]
-
-                # # Filter and print rules specific to the selected segment
-                # segment_rules = [line for line in rules.splitlines() if "class: {}".format(selected_segment_encoded) in line]
-
-                # st.write(f"\nRules for {selected_segment}:")
-                # for rule in segment_rules:
-                #     st.text(rule)
-
-                # # Filter and print rules specific to the selected segment
-                # segment_rules = []
-                # for line in rules.splitlines():
-                #     if "class: {}".format(selected_segment_encoded) in line:
-                #         # Add this line and all preceding lines until we reach a higher indentation level
-                #         segment_rules.append(line)
-                #         # Get the indentation level of this line to find preceding rules
-                #         indent_level = len(line) - len(line.lstrip())
-                        
-                #         # Add preceding lines until we reach a higher level of indentation
-                #         while True:
-                #             previous_line_index = rules.splitlines().index(line) - len(segment_rules)
-                #             if previous_line_index < 0:
-                #                 break
-                            
-                #             previous_line = rules.splitlines()[previous_line_index]
-                #             if len(previous_line) - len(previous_line.lstrip()) < indent_level:
-                #                 break
-                            
-                #             segment_rules.append(previous_line)
-
-                # # Print filtered rules for the selected segment
-                # st.write(f"\nRules for {selected_segment}:")
-                # for rule in reversed(segment_rules): # Reverse to maintain original order of rules
-                #     st.text(rule)
-
-                # 1. Prepare target variable (success = approved & accepted)
-                #st.write("Success rate:", round(df['is_successful'].mean(),2))
-                #st.write("Class distribution:", df['is_successful'].value_counts())
-
-
-                # 2. Create feature matrix
-                #df = df.rename(columns={'Approval_Level_Numeric': 'Approval Level', 'DS': 'Deal Score', 'Vol': 'Deal Size', 'GM': 'Gross Margin %','QuoteType__c':'Quote Type'})
-                #df = df[['Deal Score', 'Deal Size', 'Gross Margin %','is_successful']].dropna()
-
-                X = df[['Deal Score', 'Deal Size', 'Gross Margin %']]
-                y = df['Segment']
-                
-                    # Check for nulls
-                if X.isnull().any().any():
-                    #st.warning("Data contains null values. Cleaning...")
-                    X = X.fillna(X.mean())
 
                 # 3. Train decision tree (with controlled depth for interpretable rules)
                 #dt = DecisionTreeClassifier(max_depth=3, min_samples_leaf=2,random_state=42)
@@ -1141,15 +1079,6 @@ def main():
                 # except Exception as e:
                 #     st.error(f"Error plotting decision tree: {str(e)}")
 
-                # def get_rules(tree, feature_names, class_names):
-                #     tree_ = tree.tree_
-                #     feature_name = [
-                #         feature_names[i] if i != -2 else "undefined!"
-                #         for i in tree_.feature
-                #     ]
-
-                #     paths = []
-                #     path = []
 
                 def recurse(tree_, feature_name, node, path, paths):
                     if tree_.feature[node] != -2:
@@ -1250,11 +1179,9 @@ def main():
 
                 return clf, X       
                     
-
-
             def create_rule_based_recommendations(df):
                 """Main function to create and display rules"""
-                st.title("Deal Acceptance Analysis")
+                st.title("Segmentation Rules Analysis")
                 
                 #df['is_successful'] = df['status'].isin(['Approved','Accepted'])
                 df = df.loc[df['status'].isin(['Approved','Accepted', 'Rejected','Declined'])]
@@ -1343,8 +1270,104 @@ def main():
                 # except Exception as e:
                 #     st.error(f"Error calculating zone statistics: {str(e)}")
 
-            # segmentation_tool(vis_data)
-            # create_rule_based_recommendations(vis_data)
+            def deal_classification_model(df):
+                np.random.seed(42)
+                X = df[['Gross Margin %', 'Deal Size', 'Deal Score', 'Country', 'FP']]
+                y = df['Approval_Level']
+
+                le_country = LabelEncoder()
+                le_fp = LabelEncoder()
+                X_encoded = X.copy()
+                X_encoded['Country'] = le_country.fit_transform(X['Country'])
+                X_encoded['FP'] = le_fp.fit_transform(X['FP'])
+
+                # Scale numerical features
+                scaler = StandardScaler()
+                numerical_cols = ['Gross Margin %', 'Deal Size', 'Deal Score']
+                X_encoded[numerical_cols] = scaler.fit_transform(X_encoded[numerical_cols])
+
+                # Split the data
+                X_train, X_test, y_train, y_test = train_test_split(X_encoded, y, test_size=0.2, random_state=42)
+
+                # Train the model
+                model = RandomForestClassifier(random_state=42)
+                model.fit(X_train, y_train)
+
+                # Make predictions
+                y_pred = model.predict(X_encoded)
+
+                # Find misclassified samples
+                misclassified_mask = y_pred != y
+                misclassified_df = df[misclassified_mask].copy()
+                misclassified_df['Predicted Approval Level'] = y_pred[misclassified_mask]
+
+                color_map = {
+                    'L0': '#79cac1',  
+                    'L1': '#3b9153',  
+                    'L2': '#009dd2',  
+                    'L3': '#f78e82',  
+                    'L4': '#d774ae',
+                    'L5':'#69008c'
+                }
+
+                # Create a list of all possible levels
+                all_levels = sorted(list(set(df['Approval_Level'].unique()) | set(misclassified_df['Predicted Approval Level'].unique())))
+
+                # Streamlit app
+                st.title('Quote Classification Analysis Tool')
+                st.write(
+                    """This tool uses a classification model to identify quotes that exhibit characteristics more typical of different approval levels than their assigned ones. 
+                    By analyzing the model's predictions, we can surface quotes that may be "borderline" or share strong similarities with other categories.
+                    """
+                )
+                # Create 3D scatter plots
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.subheader('Misclassified Quotes - Actual Approval Levels')
+                    fig1 = px.scatter_3d(
+                        misclassified_df,
+                        x='Gross Margin %',
+                        y='Deal Size',
+                        z='Deal Score',
+                        color='Approval_Level',
+                        color_discrete_map=color_map,
+                        category_orders={'Approval_Level': all_levels},
+                        title='Actual Approval Levels',
+                        labels={'Approval_Level': 'Actual Approval Level'}
+                    )
+                    fig1.update_layout(height=700)
+                    st.plotly_chart(fig1, use_container_width=True)
+
+                with col2:
+                    st.subheader('Misclassified Quotes - Predicted Approval Levels')
+                    fig2 = px.scatter_3d(
+                        misclassified_df,
+                        x='Gross Margin %',
+                        y='Deal Size',
+                        z='Deal Score',
+                        color='Predicted Approval Level',
+                        color_discrete_map=color_map,
+                        category_orders={'Predicted Approval Level': all_levels},
+                        title='Predicted Approval Levels',
+                        labels={'Predicted Approval Level': 'Predicted Approval Level'}
+                    )
+                    fig2.update_layout(height=700)
+                    st.plotly_chart(fig2, use_container_width=True)
+
+                # Display model performance metrics
+                st.write('Model Performance:')
+                accuracy = (y_pred == y).mean()
+                st.write(f'Overall Accuracy: {accuracy:.2%}')
+                st.write(f'Number of misclassified quotes: {len(misclassified_df)}')
+
+                 # Display misclassified samples
+                st.header('Misclassified Quotes')
+                st.dataframe(misclassified_df[['Gross Margin %', 'Deal Size', 'Deal Score', 'Country', 'FP', 'Approval_Level','Predicted Approval Level']])
+
+            deal_classification_model(vis_data)
+            segmentation_tool(vis_data)
+            create_rule_based_recommendations(vis_data)
 
             # Raw Data Table
             st.header('Raw Data')
