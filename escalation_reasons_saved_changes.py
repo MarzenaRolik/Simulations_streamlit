@@ -912,26 +912,29 @@ def main():
 
             def segmentation_tool(vis_data):
                 st.title("Quote Segmentation Tool")
+                st.write("Define the importance of the main feautures:")
                 # Create two columns for weights
                 col1, col2, col3 = st.columns(3)
 
                 with col1:
-                    weight_gm = st.number_input("Weight for Gross Margin %", value=0.57, format="%.2f")
+                    weight_gm = st.number_input("Weight for Gross Margin %", value=0.6, format="%.2f")
                 with col2:
-                    weight_ds = st.number_input("Weight for Deal Size", value=0.28, format="%.2f")
+                    weight_ds = st.number_input("Weight for Deal Size", value=0.25, format="%.2f")
                 with col3:
                     weight_dscore = st.number_input("Weight for Deal Score", value=0.15, format="%.2f")
+
+                st.write("Define preferably percentage of quotes in each segment/level: :")
 
                 # Create two columns for segment quantiles
                 col3, col4 = st.columns(2)
 
                 with col3:
-                    quantile_a = st.number_input("Quantile for Segment A", value=0.05, format="%.2f", min_value=0.01)
-                    quantile_b = st.number_input("Quantile for Segment B", value=0.20, format="%.2f", min_value=quantile_a + 0.01)
+                    quantile_a = st.number_input("Quantile for Segment 5", value=0.05, format="%.2f", min_value=0.01)
+                    quantile_b = st.number_input("Quantile for Segment 4", value=0.20, format="%.2f", min_value=quantile_a + 0.01)
 
                 with col4:
-                    quantile_c = st.number_input("Quantile for Segment C", value=0.50, format="%.2f", min_value=quantile_b + 0.01)
-                    quantile_d = st.number_input("Quantile for Segment D", value=0.80, format="%.2f", min_value=quantile_c + 0.01)
+                    quantile_c = st.number_input("Quantile for Segment 3", value=0.50, format="%.2f", min_value=quantile_b + 0.01)
+                    quantile_d = st.number_input("Quantile for Segment 2", value=0.80, format="%.2f", min_value=quantile_c + 0.01)
 
                 # Step to ensure valid weights and quantiles
                 if weight_gm + weight_ds + weight_dscore != 1.0:
@@ -958,27 +961,27 @@ def main():
                             weight_dscore * vis_data['DScore_rank_norm'] + 
                             weight_gm * vis_data['GM_rank_norm'])
 
-                # Step 4: Define segment boundaries based on user-defined quantiles
+                # Step 4: Define Segment 4oundaries based on user-defined quantiles
                 segment_boundaries = {
-                    'Segment A': vis_data['Score'].quantile(quantile_a),
-                    'Segment B': vis_data['Score'].quantile(quantile_b),
-                    'Segment C': vis_data['Score'].quantile(quantile_c),
-                    'Segment D': vis_data['Score'].quantile(quantile_d),
-                    'Segment E': vis_data['Score'].max()   # Last segment includes everything above Segment D
+                    'Segment 5': vis_data['Score'].quantile(quantile_a),
+                    'Segment 4': vis_data['Score'].quantile(quantile_b),
+                    'Segment 3': vis_data['Score'].quantile(quantile_c),
+                    'Segment 2': vis_data['Score'].quantile(quantile_d),
+                    'Segment 1': vis_data['Score'].max()   # Last segment includes everything above Segment 2
                 }
 
                 # Assign segments based on score
                 def assign_segment(score):
-                    if score <= segment_boundaries['Segment A']:
-                        return 'Segment A'
-                    elif score <= segment_boundaries['Segment B']:
-                        return 'Segment B'
-                    elif score <= segment_boundaries['Segment C']:
-                        return 'Segment C'
-                    elif score <= segment_boundaries['Segment D']:
-                        return 'Segment D'
+                    if score <= segment_boundaries['Segment 5']:
+                        return 'Segment 5'
+                    elif score <= segment_boundaries['Segment 4']:
+                        return 'Segment 4'
+                    elif score <= segment_boundaries['Segment 3']:
+                        return 'Segment 3'
+                    elif score <= segment_boundaries['Segment 2']:
+                        return 'Segment 2'
                     else:
-                        return 'Segment E'
+                        return 'Segment 1'
 
                 vis_data['Segment'] = vis_data['Score'].apply(assign_segment)
                 
@@ -989,8 +992,8 @@ def main():
                     fig1 = px.pie(
                         values=level_counts.values,
                         names=level_counts.index,
-                        title=f'Distribution of Segments ({len(vis_data)} deals)',
-                        category_orders={"names": sorted(level_counts.index, reverse=True)}
+                        title=f'Distribution of Calculated Segments ({len(vis_data)} deals)',
+                        category_orders={"names": sorted(level_counts.index, reverse=False)}
                     )
                     st.plotly_chart(fig1)
 
@@ -1001,16 +1004,16 @@ def main():
                         x='Deal Score', 
                         y='Deal Size', 
                         z='Gross Margin %',
-                        color='Segment',category_orders={"Segment": sorted(vis_data['Segment'].unique(), reverse=True)},
+                        color='Segment',category_orders={"Segment": sorted(vis_data['Segment'].unique(), reverse=False)},
 
-                        title="Deal Distribution by Segments"
+                        title="Deal Distribution by Calculated Segments"
                     )
                     st.plotly_chart(fig2)
 
                 # Display the segmented DataFrame in Streamlit
                 st.write(vis_data[['Gross Margin %', 'Deal Size', 'Deal Score', 
                             'GM_rank_norm', 'DS_rank_norm', 'DScore_rank_norm', 
-                            'Score', 'Segment']])
+                            'Score', 'Segment', 'Country', 'Approval Level']])
 
             def analyze_approval_rules(df):
 
@@ -1021,13 +1024,12 @@ def main():
                 # Features and target
                 X = df[['Gross Margin %', 'Deal Size', 'Deal Score']]
                 y = df['Segment_encoded']
-
-                # Split the data into training and testing sets
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+                
+                max_depth = st.number_input("Max Decision Tree Depth - Higher value more complex tree with higher accuracy (to certain point) but less readible", value=4,  min_value=1)
 
                 # Train a Decision Tree Classifier
-                clf = DecisionTreeClassifier(random_state=42,max_depth=5 )
-                clf.fit(X_train, y_train)
+                clf = DecisionTreeClassifier(random_state=42,max_depth=max_depth)
+                clf.fit(X, y)
 
                 # Visualize the Decision Tree
                 fig, ax = plt.subplots(figsize=(15, 10))
@@ -1041,71 +1043,8 @@ def main():
                 st.pyplot(fig)
                 plt.show()
 
-                rules = export_text(clf,
-                                    feature_names=list(X.columns))
-
                 # Streamlit UI for user input
                 st.title("Decision Rules for Quote Segmentation")
-
-                # # User input for segment selection
-                # selected_segment = st.selectbox("Select a Segment", label_encoder.classes_)
-
-                # # # Print all rules
-                # st.write("All Decision Rules:")
-                # st.text(rules)
-
-                # Decode selected segment
-                #selected_segment_encoded = label_encoder.transform([selected_segment])[0]
-
-                # # Filter and print rules specific to the selected segment
-                # segment_rules = [line for line in rules.splitlines() if "class: {}".format(selected_segment_encoded) in line]
-
-                # st.write(f"\nRules for {selected_segment}:")
-                # for rule in segment_rules:
-                #     st.text(rule)
-
-                # # Filter and print rules specific to the selected segment
-                # segment_rules = []
-                # for line in rules.splitlines():
-                #     if "class: {}".format(selected_segment_encoded) in line:
-                #         # Add this line and all preceding lines until we reach a higher indentation level
-                #         segment_rules.append(line)
-                #         # Get the indentation level of this line to find preceding rules
-                #         indent_level = len(line) - len(line.lstrip())
-                        
-                #         # Add preceding lines until we reach a higher level of indentation
-                #         while True:
-                #             previous_line_index = rules.splitlines().index(line) - len(segment_rules)
-                #             if previous_line_index < 0:
-                #                 break
-                            
-                #             previous_line = rules.splitlines()[previous_line_index]
-                #             if len(previous_line) - len(previous_line.lstrip()) < indent_level:
-                #                 break
-                            
-                #             segment_rules.append(previous_line)
-
-                # # Print filtered rules for the selected segment
-                # st.write(f"\nRules for {selected_segment}:")
-                # for rule in reversed(segment_rules): # Reverse to maintain original order of rules
-                #     st.text(rule)
-
-                # 1. Prepare target variable (success = approved & accepted)
-                #st.write("Success rate:", round(df['is_successful'].mean(),2))
-                #st.write("Class distribution:", df['is_successful'].value_counts())
-
-
-                # 2. Create feature matrix
-                #df = df.rename(columns={'Approval_Level_Numeric': 'Approval Level', 'DS': 'Deal Score', 'Vol': 'Deal Size', 'GM': 'Gross Margin %','QuoteType__c':'Quote Type'})
-                #df = df[['Deal Score', 'Deal Size', 'Gross Margin %','is_successful']].dropna()
-
-                X = df[['Deal Score', 'Deal Size', 'Gross Margin %']]
-                y = df['Segment']
-                
-                    # Check for nulls
-                if X.isnull().any().any():
-                    #st.warning("Data contains null values. Cleaning...")
-                    X = X.fillna(X.mean())
 
                 # 3. Train decision tree (with controlled depth for interpretable rules)
                 #dt = DecisionTreeClassifier(max_depth=3, min_samples_leaf=2,random_state=42)
@@ -1141,15 +1080,6 @@ def main():
                 # except Exception as e:
                 #     st.error(f"Error plotting decision tree: {str(e)}")
 
-                # def get_rules(tree, feature_names, class_names):
-                #     tree_ = tree.tree_
-                #     feature_name = [
-                #         feature_names[i] if i != -2 else "undefined!"
-                #         for i in tree_.feature
-                #     ]
-
-                #     paths = []
-                #     path = []
 
                 def recurse(tree_, feature_name, node, path, paths):
                     if tree_.feature[node] != -2:
@@ -1250,11 +1180,9 @@ def main():
 
                 return clf, X       
                     
-
-
             def create_rule_based_recommendations(df):
                 """Main function to create and display rules"""
-                st.title("Deal Acceptance Analysis")
+                st.title("Segmentation Rules Analysis")
                 
                 #df['is_successful'] = df['status'].isin(['Approved','Accepted'])
                 df = df.loc[df['status'].isin(['Approved','Accepted', 'Rejected','Declined'])]
@@ -1343,8 +1271,8 @@ def main():
                 # except Exception as e:
                 #     st.error(f"Error calculating zone statistics: {str(e)}")
 
-            # segmentation_tool(vis_data)
-            # create_rule_based_recommendations(vis_data)
+            segmentation_tool(vis_data)
+            create_rule_based_recommendations(vis_data)
 
             # Raw Data Table
             st.header('Raw Data')
