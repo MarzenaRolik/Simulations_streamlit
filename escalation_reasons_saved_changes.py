@@ -14,7 +14,9 @@ import plotly.express as px
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, plot_tree, export_text
 from plotly.subplots import make_subplots
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+
 
 pio.templates[pio.templates.default].layout.colorway = ['#79cac1', '#3b9153', '#009dd2', '#f78e82', '#d774ae', '#69008c']
 
@@ -912,7 +914,12 @@ def main():
 
             def segmentation_tool(vis_data):
                 st.title("Quote Segmentation Tool")
-                st.write("Define the importance of the main feautures:")
+                st.write("""
+                         This tool combines user control with automated analysis by allowing manual weight assignment to features and desired segment sizes, creating a weighted scoring system based on normalized rankings. 
+                         After segmenting the data according to these user-defined parameters, it employs a classification model to discover and extract the underlying rules that characterize each segment, 
+                         making the complex segmentation logic interpretable and actionable.
+                         """)
+                st.write("Set Feature Priority Weights:")
                 # Create two columns for weights
                 col1, col2, col3 = st.columns(3)
 
@@ -923,7 +930,7 @@ def main():
                 with col3:
                     weight_dscore = st.number_input("Weight for Deal Score", value=0.15, format="%.2f")
 
-                st.write("Define preferably percentage of quotes in each segment/level: :")
+                st.write("Define Desired Segment Sizes by Quantile Thresholds :")
 
                 # Create two columns for segment quantiles
                 col3, col4 = st.columns(2)
@@ -1025,7 +1032,7 @@ def main():
                 X = df[['Gross Margin %', 'Deal Size', 'Deal Score']]
                 y = df['Segment_encoded']
                 
-                max_depth = st.number_input("Max Decision Tree Depth - Higher value more complex tree with higher accuracy (to certain point) but less readible", value=4,  min_value=1)
+                max_depth = st.number_input("Tree Complexity Level - Set how many layers of rules to create. More layers mean more precise but complex patterns", value=3,  min_value=1)
 
                 # Train a Decision Tree Classifier
                 clf = DecisionTreeClassifier(random_state=42,max_depth=max_depth)
@@ -1271,6 +1278,102 @@ def main():
                 # except Exception as e:
                 #     st.error(f"Error calculating zone statistics: {str(e)}")
 
+            def deal_classification_model(df):
+                np.random.seed(42)
+                X = df[['Gross Margin %', 'Deal Size', 'Deal Score', 'Country', 'FP']]
+                y = df['Approval_Level']
+
+                le_country = LabelEncoder()
+                le_fp = LabelEncoder()
+                X_encoded = X.copy()
+                X_encoded['Country'] = le_country.fit_transform(X['Country'])
+                X_encoded['FP'] = le_fp.fit_transform(X['FP'])
+
+                # Scale numerical features
+                scaler = StandardScaler()
+                numerical_cols = ['Gross Margin %', 'Deal Size', 'Deal Score']
+                X_encoded[numerical_cols] = scaler.fit_transform(X_encoded[numerical_cols])
+
+                # Split the data
+                X_train, X_test, y_train, y_test = train_test_split(X_encoded, y, test_size=0.2, random_state=42)
+
+                # Train the model
+                model = RandomForestClassifier(random_state=42)
+                model.fit(X_train, y_train)
+
+                # Make predictions
+                y_pred = model.predict(X_encoded)
+
+                # Find misclassified samples
+                misclassified_mask = y_pred != y
+                misclassified_df = df[misclassified_mask].copy()
+                misclassified_df['Predicted Approval Level'] = y_pred[misclassified_mask]
+
+                color_map = {
+                    'L0': '#79cac1',  
+                    'L1': '#3b9153',  
+                    'L2': '#009dd2',  
+                    'L3': '#f78e82',  
+                    'L4': '#d774ae',
+                    'L5':'#69008c'
+                }
+
+                # Create a list of all possible levels
+                all_levels = sorted(list(set(df['Approval_Level'].unique()) | set(misclassified_df['Predicted Approval Level'].unique())))
+
+                # Streamlit app
+                st.title('Quote Classification Analysis')
+                st.write(
+                    """This approach uses a classification model to identify quotes that exhibit characteristics more typical of different approval levels than their assigned ones. 
+                    By analyzing the model's predictions, we can surface quotes that may be "borderline" or share strong similarities with other categories.
+                    """
+                )
+                # Create 3D scatter plots
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.subheader('Misclassified Quotes - Actual Approval Levels')
+                    fig1 = px.scatter_3d(
+                        misclassified_df,
+                        x='Gross Margin %',
+                        y='Deal Size',
+                        z='Deal Score',
+                        color='Approval_Level',
+                        color_discrete_map=color_map,
+                        category_orders={'Approval_Level': all_levels},
+                        title='Actual Approval Levels',
+                        labels={'Approval_Level': 'Actual Approval Level'}
+                    )
+                    fig1.update_layout(height=700)
+                    st.plotly_chart(fig1, use_container_width=True)
+
+                with col2:
+                    st.subheader('Misclassified Quotes - Predicted Approval Levels')
+                    fig2 = px.scatter_3d(
+                        misclassified_df,
+                        x='Gross Margin %',
+                        y='Deal Size',
+                        z='Deal Score',
+                        color='Predicted Approval Level',
+                        color_discrete_map=color_map,
+                        category_orders={'Predicted Approval Level': all_levels},
+                        title='Predicted Approval Levels',
+                        labels={'Predicted Approval Level': 'Predicted Approval Level'}
+                    )
+                    fig2.update_layout(height=700)
+                    st.plotly_chart(fig2, use_container_width=True)
+
+                # Display model performance metrics
+                st.write('Model Performance:')
+                accuracy = (y_pred == y).mean()
+                st.write(f'Overall Accuracy: {accuracy:.2%}')
+                st.write(f'Number of misclassified quotes: {len(misclassified_df)}')
+
+                 # Display misclassified samples
+                st.header('Misclassified Quotes')
+                st.dataframe(misclassified_df[['Gross Margin %', 'Deal Size', 'Deal Score', 'Country', 'FP', 'Approval_Level','Predicted Approval Level']])
+
+            deal_classification_model(vis_data)
             segmentation_tool(vis_data)
             create_rule_based_recommendations(vis_data)
 
