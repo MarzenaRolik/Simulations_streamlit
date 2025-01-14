@@ -393,6 +393,7 @@ def main():
 
             # --- Visualizations ---
             st.header('Visualizations')
+            vis_data = vis_data.rename(columns={'Approval_Level_Numeric': 'Approval Level', 'DS': 'Deal Score', 'Vol': 'Deal Size', 'GM': 'Gross Margin %','QuoteType__c':'Quote Type'})
 
             # First Row: Approval Level and Escalation Distributions
             col1, col2 = st.columns(2)
@@ -427,10 +428,10 @@ def main():
                 # Scatter plot with Volume vs GM colored by Approval Level
                 fig3 = px.scatter(
                     vis_data,
-                    x='Vol',
-                    y='GM',
+                    x='Deal Size',
+                    y='Gross Margin %',
                     color='Approval_Level',
-                    title='Volume vs Gross Margin by Approval Level',
+                    title='Deal Size vs Gross Margin by Approval Level',
                     category_orders={"Approval_Level": sorted(vis_data['Approval_Level'].unique())},                    log_x=True
                 )
                 st.plotly_chart(fig3)
@@ -439,10 +440,10 @@ def main():
                 # Scatter plot with Volume vs GM colored by Escalation Reason
                 fig4 = px.scatter(
                     vis_data,
-                    x='Vol',
-                    y='GM',
+                    x='Deal Size',
+                    y='Gross Margin %',
                     color='Final_Escalation',
-                    title='Volume vs Gross Margin by Escalation Reason',
+                    title='Deal Size vs Gross Margin by Escalation Reason',
                     category_orders={"Final_Escalation": sorted(vis_data['Final_Escalation'].unique())},
                     log_x=True
                 )
@@ -461,7 +462,7 @@ def main():
 
             fig6 = px.histogram(
                 vis_data,
-                x='DS',
+                x='Deal Score',
                 color='Approval_Level',
                 title='Deal Score Distribution by Final Approval Level',
                 category_orders={"Approval_Level": sorted(vis_data['Approval_Level'].unique())},
@@ -472,21 +473,13 @@ def main():
 
             fig7 = px.scatter_3d(
             vis_data, 
-            x='DS', 
-            y='Vol', 
-            z='GM',
+            x='Deal Score', 
+            y='Deal Size', 
+            z='Gross Margin %',
             color='Approval_Level',category_orders={"Approval_Level": sorted(vis_data['Approval_Level'].unique())},
-            # color_discrete_map={
-            #     'Safe': 'rgba(0, 255, 0, 0.3)',
-            #     'Moderate': 'blue',
-            #     'Warning': 'orange',
-            #     'High Risk': 'red'
-            # },
             title="Deal Distribution by Approval Level"
         )
-            # fig.for_each_trace(lambda trace: trace.update(visible="legendonly") 
-            #     if trace.name in ['Safe'] else ())
-            # st.plotly_chart(fig)
+
             st.plotly_chart(fig7)
 
             # Cross-tabulation Table
@@ -501,21 +494,21 @@ def main():
             # Summary Statistics
             st.subheader('Summary by Approval Level')
             summary_stats = vis_data.groupby('Approval_Level').agg({
-                'Vol': ['count', 'mean', 'median', 'sum'],
-                'GM': ['mean', 'median'],
-                'DS': ['mean', 'median']
+                'Deal Size': ['count', 'mean', 'median', 'sum'],
+                'Gross Margin %': ['mean', 'median'],
+                'Deal Score': ['mean', 'median']
             }).round(0)
             
             # Calculate totals with matching MultiIndex structure
             total_stats = pd.DataFrame([
-                [int(vis_data['Vol'].count()), 
-                round(vis_data['Vol'].mean(), 0), 
-                round(vis_data['Vol'].median(), 0),
-                round(vis_data['Vol'].sum(), 0),
-                round(vis_data['GM'].mean(), 0), 
-                round(vis_data['GM'].median(), 0),
-                round(vis_data['DS'].mean(), 0), 
-                round(vis_data['DS'].median(), 0)]
+                [int(vis_data['Deal Size'].count()), 
+                round(vis_data['Deal Size'].mean(), 0), 
+                round(vis_data['Deal Size'].median(), 0),
+                round(vis_data['Deal Size'].sum(), 0),
+                round(vis_data['Gross Margin %'].mean(), 0), 
+                round(vis_data['Gross Margin %'].median(), 0),
+                round(vis_data['Deal Score'].mean(), 0), 
+                round(vis_data['Deal Score'].median(), 0)]
             ], columns=summary_stats.columns, index=pd.Index(['Total']))
 
             # Combine the grouped stats with the total row
@@ -525,7 +518,6 @@ def main():
             def format_eur(x):
                 return f"€{x:,.0f}".replace(',', '.')
             
-            # Rename the columns for clarity
             summary_stats.columns = [
                 'Count', 'Avg Volume', 'Median Volume', 'Total Sales',
                 'Avg Gross Margin %', 'Median Gross Margin %',
@@ -1322,9 +1314,9 @@ def main():
                 all_levels = sorted(list(set(df['Approval_Level'].unique()) | set(misclassified_df['Predicted Approval Level'].unique())))
 
                 # Streamlit app
-                st.title('Quote Classification Analysis')
+                st.title('Quote Classification Analysis Tool')
                 st.write(
-                    """This approach uses a classification model to identify quotes that exhibit characteristics more typical of different approval levels than their assigned ones. 
+                    """This tool uses a classification model to identify quotes that exhibit characteristics more typical of different approval levels than their assigned ones. 
                     By analyzing the model's predictions, we can surface quotes that may be "borderline" or share strong similarities with other categories.
                     """
                 )
