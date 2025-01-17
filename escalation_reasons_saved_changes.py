@@ -1010,91 +1010,10 @@ def main():
                 
                 return summary_stats, importance_df
 
+            # Add button to trigger analysis
+            if st.button("Below Hard Floor Price Quotes Analysis"):
 
-            # def analyze_below_floor_quotes(df):
-            #     # Filter for below hard floor price quotes
-            #     below_floor_df = df[df['FP'] == True].copy()
-                
-            #     # 1. Correlation Analysis
-            #     numerical_cols = ['Deal Score', 'Deal Size', 'Gross Margin %']
-            #     corr_matrix = below_floor_df[numerical_cols].corr()
-                
-            #     # Correlation Heatmap
-            #     fig_corr = px.imshow(corr_matrix,
-            #                         labels=dict(color="Correlation"),
-            #                         title="Correlation Matrix for Below Floor Price Quotes",
-            #                         color_continuous_scale="RdBu")
-            #     fig_corr.show()
-            #     st.plotly_chart(fig_corr, use_container_width=True)
-                
-            #     # 2. Deal Size vs Gross Margin Scatter Plot by Approval Level
-            #     fig_scatter = px.scatter(below_floor_df,
-            #                         x='Deal Size',
-            #                         y='Gross Margin %',
-            #                         color='Approval Level',
-            #                         size='Deal Score',
-            #                         hover_data=['Quote Type', 'Country'],
-            #                         title='Deal Size vs Gross Margin % by Approval Level')
-            #     fig_scatter.show()
-            #     st.plotly_chart(fig_scatter, use_container_width=True)
-                
-            #     # 3. Box Plot of Gross Margins by Quote Type
-            #     fig_box = px.box(below_floor_df,
-            #                     x='Quote Type',
-            #                     y='Gross Margin %',
-            #                     color='Quote Type',
-            #                     title='Gross Margin Distribution by Quote Type')
-            #     fig_box.show()
-            #     st.plotly_chart(fig_box, use_container_width=True)
-                
-            #     # 4. Deal Score Distribution by Country
-            #     fig_violin = px.violin(below_floor_df,
-            #                         x='Country',
-            #                         y='Deal Score',
-            #                         box=True,
-            #                         points="all",
-            #                         title='Deal Score Distribution by Country')
-            #     fig_violin.show()
-            #     st.plotly_chart(fig_violin, use_container_width=True)
-                
-            #     # 5. Status Distribution
-            #     fig_pie = px.pie(below_floor_df,
-            #                     names='Status',
-            #                     title='Quote Status Distribution')
-            #     fig_pie.show()
-            #     st.plotly_chart(fig_pie, use_container_width=True)
-                
-            #     # 6. Approval Level Analysis
-            #     approval_stats = below_floor_df.groupby('Approval Level').agg({
-            #         'Deal Size': 'mean',
-            #         'Gross Margin %': 'mean',
-            #         'Deal Score': 'mean',
-            #         'Quote Type': 'count'
-            #     }).round(2)
-                
-            #     # Bar chart for approval level metrics
-            #     fig_bar = px.bar(approval_stats.reset_index(),
-            #                     x='Approval Level',
-            #                     y=['Deal Size', 'Gross Margin %', 'Deal Score'],
-            #                     title='Average Metrics by Approval Level',
-            #                     barmode='group')
-            #     fig_bar.show()
-            #     st.plotly_chart(fig_bar, use_container_width=True)
-                
-            #     # Return summary statistics
-            #     summary_stats = {
-            #         'total_quotes': len(below_floor_df),
-            #         'avg_deal_size': below_floor_df['Deal Size'].mean(),
-            #         'avg_margin': below_floor_df['Gross Margin %'].mean(),
-            #         'avg_deal_score': below_floor_df['Deal Score'].mean(),
-            #         'approval_level_counts': below_floor_df['Approval Level'].value_counts().to_dict(),
-            #         'quote_type_counts': below_floor_df['Quote Type'].value_counts().to_dict()
-            #     }
-            #     st.write(summary_stats)
-            #     return summary_stats, approval_stats
-
-            # summary_stats, approval_stats = analyze_below_floor_quotes(vis_data)
-            summary_stats,  importance_df = compare_floor_price_quotes(vis_data)
+                summary_stats,  importance_df = compare_floor_price_quotes(vis_data)
 
             def segmentation_tool(vis_data):
                 st.title("Quote Segmentation Tool")
