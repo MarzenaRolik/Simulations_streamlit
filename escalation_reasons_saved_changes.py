@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.figure_factory as ff
 import json
 from datetime import datetime
 import plotly.io as pio
@@ -903,6 +904,197 @@ def main():
             create_correlation_analysis(vis_data)
             
             vis_data = vis_data.rename(columns={'Approval_Level_Numeric': 'Approval Level', 'DS': 'Deal Score', 'Vol': 'Deal Size', 'GM': 'Gross Margin %','QuoteType__c':'Quote Type'})
+
+            def compare_floor_price_quotes(df):
+                
+                st.write("### Below Hard Floor Price Quotes Analysis")
+
+                # Create comparison summary
+                numerical_cols = ['Deal Score', 'Deal Size', 'Gross Margin %']
+                
+                # 1. Summary Statistics Comparison
+                summary_stats = df.groupby('FP')[numerical_cols].agg([
+                    'mean', 'median', 'std', 'count'
+                ]).round(2)
+                
+                        # 2. Distribution Comparisons
+                col1, col2, col3 = st.columns(3)
+                
+                # Create and display plots for all features
+                for idx, (col_name, plot_col) in enumerate(zip(numerical_cols, [col1, col2, col3])):
+                    if col_name not in df.columns:
+                        plot_col.warning(f"Column {col_name} not found in data")
+                        continue
+                        
+                    # Calculate averages
+                    avg_by_group = df.groupby('FP')[col_name].mean().reset_index()
+                    
+                    # Create bar plot
+                    fig_bar = px.bar(avg_by_group, 
+                                    x='FP',
+                                    y=col_name,
+                                    title=f'Average {col_name}',
+                                    text=avg_by_group[col_name].round(0))
+                    
+                    fig_bar.update_traces(textposition='outside',
+                                        textfont=dict(size=12))
+                    
+                    fig_bar.update_layout(
+                        xaxis_title="Below Floor Price",
+                        yaxis_title=f"Average {col_name}",
+                        bargap=0.3,
+                        showlegend=False,
+                        yaxis_range=[0, avg_by_group[col_name].max() * 1.1],
+                        height=400,  # Set consistent height
+                        width=400,   # Set consistent width
+                        margin=dict(t=50, l=50, r=20, b=50)  # Adjust margins for better fit
+                    )
+                
+
+                    plot_col.plotly_chart(fig_bar, use_container_width=True)
+                
+                # 3. Categorical Feature Analysis
+                categorical_cols = ['Approval Level', 'Quote Type', 'Country', 'status']
+                
+                for cat_col in categorical_cols:
+                    # Calculate absolute counts for each category
+                    counts = pd.crosstab(df[cat_col], 
+                                        df['FP'])
+                    
+                    # Create bar plot
+                    fig_bar = px.bar(counts,
+                                    title=f'{cat_col} Distribution by Floor Price Flag',
+                                    labels={'value': 'Number of Quotes',
+                                        'Below Hard Floor Price': 'Below Floor Price'},
+                                    barmode='group')
+                    
+                    # Update layout for better readability
+                    fig_bar.update_layout(
+                        xaxis_title=cat_col,
+                        yaxis_title="Number of Quotes",
+                        legend_title="Below Floor Price")
+                    
+                    fig_bar.for_each_trace(lambda trace: trace.update(visible="legendonly")
+                        if trace.name in ['False'] else ())
+                    
+                    st.plotly_chart(fig_bar, use_container_width=True)
+                
+                # 4. Feature Importance Analysis using Random Forest
+                def prepare_data_for_modeling(df):
+                    X = df.copy()
+                    y = X.pop('FP')
+                    
+                    # Encode categorical variables
+                    le = LabelEncoder()
+                    for col in categorical_cols:
+                        X[col] = le.fit_transform(X[col])
+                        
+                    return X[numerical_cols + categorical_cols], y
+                
+                X, y = prepare_data_for_modeling(df)
+                rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
+                rf_model.fit(X, y)
+                
+                # Create feature importance plot
+                importance_df = pd.DataFrame({
+                    'Feature': numerical_cols + categorical_cols,
+                    'Importance': rf_model.feature_importances_
+                }).sort_values('Importance', ascending=False)
+                
+                fig_importance = px.bar(importance_df,
+                                    x='Feature',
+                                    y='Importance',
+                                    title='Feature Importance for Below Floor Price Prediction')
+                st.plotly_chart(fig_importance, use_container_width=True)
+
+                
+                return summary_stats, importance_df
+
+
+            # def analyze_below_floor_quotes(df):
+            #     # Filter for below hard floor price quotes
+            #     below_floor_df = df[df['FP'] == True].copy()
+                
+            #     # 1. Correlation Analysis
+            #     numerical_cols = ['Deal Score', 'Deal Size', 'Gross Margin %']
+            #     corr_matrix = below_floor_df[numerical_cols].corr()
+                
+            #     # Correlation Heatmap
+            #     fig_corr = px.imshow(corr_matrix,
+            #                         labels=dict(color="Correlation"),
+            #                         title="Correlation Matrix for Below Floor Price Quotes",
+            #                         color_continuous_scale="RdBu")
+            #     fig_corr.show()
+            #     st.plotly_chart(fig_corr, use_container_width=True)
+                
+            #     # 2. Deal Size vs Gross Margin Scatter Plot by Approval Level
+            #     fig_scatter = px.scatter(below_floor_df,
+            #                         x='Deal Size',
+            #                         y='Gross Margin %',
+            #                         color='Approval Level',
+            #                         size='Deal Score',
+            #                         hover_data=['Quote Type', 'Country'],
+            #                         title='Deal Size vs Gross Margin % by Approval Level')
+            #     fig_scatter.show()
+            #     st.plotly_chart(fig_scatter, use_container_width=True)
+                
+            #     # 3. Box Plot of Gross Margins by Quote Type
+            #     fig_box = px.box(below_floor_df,
+            #                     x='Quote Type',
+            #                     y='Gross Margin %',
+            #                     color='Quote Type',
+            #                     title='Gross Margin Distribution by Quote Type')
+            #     fig_box.show()
+            #     st.plotly_chart(fig_box, use_container_width=True)
+                
+            #     # 4. Deal Score Distribution by Country
+            #     fig_violin = px.violin(below_floor_df,
+            #                         x='Country',
+            #                         y='Deal Score',
+            #                         box=True,
+            #                         points="all",
+            #                         title='Deal Score Distribution by Country')
+            #     fig_violin.show()
+            #     st.plotly_chart(fig_violin, use_container_width=True)
+                
+            #     # 5. Status Distribution
+            #     fig_pie = px.pie(below_floor_df,
+            #                     names='Status',
+            #                     title='Quote Status Distribution')
+            #     fig_pie.show()
+            #     st.plotly_chart(fig_pie, use_container_width=True)
+                
+            #     # 6. Approval Level Analysis
+            #     approval_stats = below_floor_df.groupby('Approval Level').agg({
+            #         'Deal Size': 'mean',
+            #         'Gross Margin %': 'mean',
+            #         'Deal Score': 'mean',
+            #         'Quote Type': 'count'
+            #     }).round(2)
+                
+            #     # Bar chart for approval level metrics
+            #     fig_bar = px.bar(approval_stats.reset_index(),
+            #                     x='Approval Level',
+            #                     y=['Deal Size', 'Gross Margin %', 'Deal Score'],
+            #                     title='Average Metrics by Approval Level',
+            #                     barmode='group')
+            #     fig_bar.show()
+            #     st.plotly_chart(fig_bar, use_container_width=True)
+                
+            #     # Return summary statistics
+            #     summary_stats = {
+            #         'total_quotes': len(below_floor_df),
+            #         'avg_deal_size': below_floor_df['Deal Size'].mean(),
+            #         'avg_margin': below_floor_df['Gross Margin %'].mean(),
+            #         'avg_deal_score': below_floor_df['Deal Score'].mean(),
+            #         'approval_level_counts': below_floor_df['Approval Level'].value_counts().to_dict(),
+            #         'quote_type_counts': below_floor_df['Quote Type'].value_counts().to_dict()
+            #     }
+            #     st.write(summary_stats)
+            #     return summary_stats, approval_stats
+
+            # summary_stats, approval_stats = analyze_below_floor_quotes(vis_data)
+            summary_stats,  importance_df = compare_floor_price_quotes(vis_data)
 
             def segmentation_tool(vis_data):
                 st.title("Quote Segmentation Tool")
